@@ -266,3 +266,19 @@ button.ghost.danger {
     flex-direction: column;
   }
 }
+
+/* Auth & Notifications */
+.auth-container { max-width: 400px; margin: 40px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); color: #333; }
+.auth-toggle { margin-top: 10px; font-size: 0.9em; text-align: center; cursor: pointer; color: #007bff; background: none; border: none; padding: 0; text-decoration: underline; }
+.user-menu { display: flex; align-items: center; gap: 15px; }
+.bell-icon { font-size: 1.5em; cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; transition: background 0.2s; }
+.bell-icon:hover { background: rgba(0,0,0,0.05); }
+.bell-count { position: absolute; top: 0; right: 0; background: red; color: white; font-size: 0.7em; border-radius: 50%; padding: 1px 5px; min-width: 16px; text-align: center; }
+.notification-panel { position: absolute; top: 60px; right: 20px; width: 320px; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 1000; max-height: 400px; overflow-y: auto; color: #333; }
+.notification-item { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.9rem; line-height: 1.4; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; cursor: pointer; }
+.notification-item:hover { background: #f9f9f9; }
+.notification-item.unread { background: #e6f3ff; font-weight: 600; }
+.notification-item:last-child { border-bottom: none; }
+.notification-empty { padding: 20px; text-align: center; color: #888; font-style: italic; }
+.notification-mark { font-size: 0.8em; color: #007bff; white-space: nowrap; margin-top: 2px; }
+

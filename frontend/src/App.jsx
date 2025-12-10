@@ -1,20 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import './App.css';
+import { useAuth } from './AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
 async function fetchJSON(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+  const token = localStorage.getItem('token');
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.error || 'Request failed');
-  }
+  if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
 
@@ -34,67 +31,190 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin }) {
         <div className="token-label">Token #{token.token_number}</div>
         <div className="token-meta">
           {token.user_name} · {token.status}
-          {token.position ? ` · position ${token.position}` : ''}
+          {token.position ? ` · pos ${token.position}` : ''}
+          {token.travel_time_minutes ? ` · ${token.travel_time_minutes} min away` : ''}
         </div>
       </div>
       <div className="token-actions">
         <span className="token-chip">{token.status}</span>
         {isAdmin && (
           <>
-            <button className="ghost" onClick={() => onComplete(token.id)}>
-              Complete
-            </button>
-            <button className="ghost" onClick={() => onNoShow(token.id)}>
-              No-show
-            </button>
+            <button className="ghost" onClick={() => onComplete(token.id)}>Complete</button>
+            <button className="ghost" onClick={() => onNoShow(token.id)}>No-show</button>
           </>
         )}
-        <button className="ghost danger" onClick={() => onCancel(token.id)}>
-          Cancel
-        </button>
+        <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
       </div>
     </div>
   );
 }
 
+function LoginView({ onSuccess, onSwitch }) {
+  const { login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await login(email, password);
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <h2>Login</h2>
+      {error && <div className="message">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <label className="field">
+          <span>Email</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Password</span>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        </label>
+        <button type="submit">Login</button>
+      </form>
+      <button className="auth-toggle" onClick={onSwitch}>Need an account? Register</button>
+    </div>
+  );
+}
+
+function RegisterView({ onSuccess, onSwitch }) {
+  const { register } = useAuth();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await register(name, email, password, phone);
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <h2>Register</h2>
+      {error && <div className="message">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <label className="field">
+          <span>Name</span>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Email</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Password</span>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Phone (optional)</span>
+          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </label>
+        <button type="submit">Register</button>
+      </form>
+      <button className="auth-toggle" onClick={onSwitch}>Have an account? Login</button>
+    </div>
+  );
+}
+
+function NotificationPanel({ userId, onClose }) {
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    fetchJSON(`/api/notifications?userId=${userId}`).then((data) => {
+      setNotifications(data.notifications || []);
+    });
+  }, [userId]);
+
+  const markRead = async (id) => {
+    await fetchJSON(`/api/notifications/${id}/read`, { method: 'POST' });
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, is_read: 1 } : n))
+    );
+  };
+
+  return (
+    <div className="notification-panel">
+      <div className="panel-header">
+        <h4>Notifications</h4>
+        <button className="ghost" onClick={onClose}>Close</button>
+      </div>
+      {notifications.length === 0 && <div className="notification-empty">No notifications</div>}
+      {notifications.map((n) => (
+        <div
+          key={n.id}
+          className={`notification-item ${n.is_read ? '' : 'unread'}`}
+          onClick={() => markRead(n.id)}
+        >
+          <div>{n.message}</div>
+          {!n.is_read && <div className="notification-mark">Mark read</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function App() {
-  const [view, setView] = useState('customer');
+  const { user, logout, loading: authLoading } = useAuth();
+  const [view, setView] = useState('customer'); // customer | admin | login | register
   const [offices, setOffices] = useState([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
   const [selectedOfficeData, setSelectedOfficeData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [adminKey, setAdminKey] = useState('');
-  const [newOffice, setNewOffice] = useState({
-    name: '',
-    serviceType: '',
-    dailyCapacity: 20,
-    operatingHours: '09:00-17:00',
-    avgServiceMinutes: 10,
-    latitude: '',
-    longitude: '',
-  });
-  const [bookingForm, setBookingForm] = useState({
-    customerName: '',
-    customerContact: '',
-    note: '',
-  });
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  // Form states
+  const [newOffice, setNewOffice] = useState({ name: '', serviceType: '', dailyCapacity: 20, operatingHours: '09:00-17:00', avgServiceMinutes: 10, latitude: '', longitude: '' });
+  const [bookingForm, setBookingForm] = useState({ customerName: '', customerContact: '', note: '' });
   const [availabilityInput, setAvailabilityInput] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
-  const selectedOffice = useMemo(() => {
-    if (!selectedOfficeData) return null;
-    return selectedOfficeData.office;
-  }, [selectedOfficeData]);
+  const selectedOffice = useMemo(() => selectedOfficeData?.office || null, [selectedOfficeData]);
+
+  // Poll for notifications if logged in
+  useEffect(() => {
+    if (!user) return;
+    const check = () => {
+      fetchJSON(`/api/notifications?userId=${user.id}`).then((data) => {
+        const unread = (data.notifications || []).filter(n => !n.is_read).length;
+        setNotificationCount(unread);
+      }).catch(() => { });
+    };
+    check();
+    const interval = setInterval(check, 10000); // 10s poll
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Auto-fill booking form if logged in
+  useEffect(() => {
+    if (user) {
+      setBookingForm((prev) => ({ ...prev, customerName: user.name, customerContact: user.email }));
+    }
+  }, [user]);
 
   useEffect(() => {
     loadOffices();
   }, []);
 
   useEffect(() => {
-    if (selectedOfficeId) {
-      fetchOfficeDetail(selectedOfficeId);
-    }
+    if (selectedOfficeId) fetchOfficeDetail(selectedOfficeId);
   }, [selectedOfficeId]);
 
   const loadOffices = async () => {
@@ -102,14 +222,8 @@ function App() {
       setLoading(true);
       const data = await fetchJSON('/api/offices');
       setOffices(data.offices);
-      if (!selectedOfficeId && data.offices.length) {
-        setSelectedOfficeId(data.offices[0].id);
-      }
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setLoading(false);
-    }
+      if (!selectedOfficeId && data.offices.length) setSelectedOfficeId(data.offices[0].id);
+    } catch (err) { setMessage(err.message); } finally { setLoading(false); }
   };
 
   const fetchOfficeDetail = async (id) => {
@@ -118,18 +232,47 @@ function App() {
       const data = await fetchJSON(`/api/offices/${id}`);
       setSelectedOfficeData(data);
       setAvailabilityInput(data.office.available_today);
+    } catch (err) { setMessage(err.message); } finally { setLoading(false); }
+  };
+
+  const handleBooking = async () => {
+    if (!selectedOfficeId) return setMessage('Choose an office');
+    if (!bookingForm.customerName) return setMessage('Name required');
+
+    try {
+      setIsBusy(true);
+      let coords = {};
+      // Request location
+      try {
+        const pos = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+        });
+        coords = { userLat: pos.coords.latitude, userLng: pos.coords.longitude };
+      } catch (e) {
+        console.warn('Geolocation failed', e);
+        // Continue without location
+      }
+
+      await fetchJSON(`/api/offices/${selectedOfficeId}/book`, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...bookingForm,
+          userId: user?.id,
+          ...coords
+        }),
+      });
+      setMessage('Booking successful!');
+      setBookingForm({ customerName: user?.name || '', customerContact: user?.email || '', note: '' });
+      await Promise.all([loadOffices(), fetchOfficeDetail(selectedOfficeId)]);
     } catch (err) {
       setMessage(err.message);
     } finally {
-      setLoading(false);
+      setIsBusy(false);
     }
   };
 
   const handleCreateOffice = async () => {
     if (!adminKey) return setMessage('Admin key required');
-    if (!newOffice.name || !newOffice.serviceType) {
-      return setMessage('Name and service type are required');
-    }
     try {
       setIsBusy(true);
       await fetchJSON('/api/offices', {
@@ -138,339 +281,180 @@ function App() {
         body: JSON.stringify(newOffice),
       });
       setMessage('Office created');
-      setNewOffice({
-        name: '',
-        serviceType: '',
-        dailyCapacity: 20,
-        operatingHours: '09:00-17:00',
-        avgServiceMinutes: 10,
-        latitude: '',
-        longitude: '',
-      });
       await loadOffices();
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  const handleBooking = async () => {
-    if (!selectedOfficeId) return setMessage('Choose an office');
-    if (!bookingForm.customerName) return setMessage('Customer name required');
-    try {
-      setIsBusy(true);
-      const data = await fetchJSON(`/api/offices/${selectedOfficeId}/book`, {
-        method: 'POST',
-        body: JSON.stringify(bookingForm),
-      });
-      setMessage(data.message || 'Booked');
-      setBookingForm({ customerName: '', customerContact: '', note: '' });
-      await Promise.all([loadOffices(), fetchOfficeDetail(selectedOfficeId)]);
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setIsBusy(false);
-    }
+    } catch (err) { setMessage(err.message); } finally { setIsBusy(false); }
   };
 
   const handleAvailabilityUpdate = async () => {
     if (!adminKey) return setMessage('Admin key required');
     try {
-      setIsBusy(true);
       await fetchJSON(`/api/offices/${selectedOfficeId}/availability`, {
         method: 'PATCH',
         headers: { 'x-admin-key': adminKey },
         body: JSON.stringify({ availableToday: Number(availabilityInput) }),
       });
       setMessage('Availability updated');
-      await Promise.all([loadOffices(), fetchOfficeDetail(selectedOfficeId)]);
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setIsBusy(false);
-    }
+      fetchOfficeDetail(selectedOfficeId);
+    } catch (err) { setMessage(err.message); }
   };
 
   const callNext = async () => {
     if (!adminKey) return setMessage('Admin key required');
     try {
-      setIsBusy(true);
       const data = await fetchJSON(`/api/offices/${selectedOfficeId}/call-next`, {
         method: 'POST',
         headers: { 'x-admin-key': adminKey },
       });
       setMessage(`Called ${data.token.user_name}`);
-      await Promise.all([loadOffices(), fetchOfficeDetail(selectedOfficeId)]);
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setIsBusy(false);
-    }
+      fetchOfficeDetail(selectedOfficeId);
+    } catch (err) { setMessage(err.message); }
   };
 
   const updateToken = async (id, action) => {
     try {
-      setIsBusy(true);
-      let path = '';
-      let headers = {};
-      switch (action) {
-        case 'cancel':
-          path = `/api/tokens/${id}/cancel`;
-          break;
-        case 'complete':
-          path = `/api/tokens/${id}/complete`;
-          headers = { 'x-admin-key': adminKey };
-          break;
-        case 'no-show':
-          path = `/api/tokens/${id}/no-show`;
-          headers = { 'x-admin-key': adminKey };
-          break;
-        default:
-          throw new Error('Unknown action');
-      }
-      await fetchJSON(path, { method: 'POST', headers });
+      let headers = action !== 'cancel' ? { 'x-admin-key': adminKey } : {};
+      await fetchJSON(`/api/tokens/${id}/${action}`, { method: 'POST', headers });
       setMessage(`Token ${action}d`);
-      await Promise.all([loadOffices(), fetchOfficeDetail(selectedOfficeId)]);
-    } catch (err) {
-      setMessage(err.message);
-    } finally {
-      setIsBusy(false);
-    }
+      fetchOfficeDetail(selectedOfficeId);
+    } catch (err) { setMessage(err.message); }
   };
 
-  const officeTokens = selectedOfficeData?.tokens || [];
+  if (authLoading) return <div>Loading app...</div>;
 
   return (
     <div className="app">
       <header className="app-header">
         <div>
           <div className="eyebrow">Queue Management System</div>
-          <h1>Serve people faster, with less crowding</h1>
-          <p className="lede">
-            Customers can see availability, book instantly, or join a virtual queue. Offices manage
-            live capacity and call the next visitor with a click.
-          </p>
+          <h1>Serve people faster</h1>
         </div>
-        <div className="view-toggle">
-          <button className={view === 'customer' ? 'active' : ''} onClick={() => setView('customer')}>
-            Customer
-          </button>
-          <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}>
-            Admin
-          </button>
+        <div className="user-menu">
+          {!user ? (
+            <button onClick={() => setView('login')}>Login / Register</button>
+          ) : (
+            <>
+              <span>Hi, {user.name}</span>
+              <div className="bell-icon" onClick={() => setShowNotifications(!showNotifications)}>
+                🔔
+                {notificationCount > 0 && <span className="bell-count">{notificationCount}</span>}
+              </div>
+              <button className="ghost" onClick={logout}>Logout</button>
+            </>
+          )}
         </div>
       </header>
 
+      {showNotifications && user && (
+        <NotificationPanel userId={user.id} onClose={() => setShowNotifications(false)} />
+      )}
+
       {message && <div className="message">{message}</div>}
 
-      <div className="layout">
-        <aside className="panel">
-          <div className="panel-header">
-            <h3>Offices</h3>
-            <button className="ghost" onClick={loadOffices} disabled={loading}>
-              Refresh
-            </button>
-          </div>
-          {loading && <div className="muted">Loading...</div>}
-          <div className="office-list">
-            {offices.map((office) => (
-              <button
-                key={office.id}
-                className={`office-card ${selectedOfficeId === office.id ? 'selected' : ''}`}
-                onClick={() => setSelectedOfficeId(office.id)}
-              >
-                <div className="office-name">{office.name}</div>
-                <div className="office-service">{office.service_type}</div>
-                <div className="office-meta">
-                  <span>Avail: {office.available_today}</span>
-                  <span>Queue: {office.queueCount}</span>
-                  <span>Active: {office.inProgressCount}</span>
-                </div>
-              </button>
-            ))}
-            {!offices.length && <div className="muted">No offices yet</div>}
-          </div>
-
-          {view === 'admin' && (
-            <div className="panel-section">
-              <h4>Create office</h4>
-              <label className="field">
-                <span>Name</span>
-                <input
-                  value={newOffice.name}
-                  onChange={(e) => setNewOffice({ ...newOffice, name: e.target.value })}
-                  placeholder="e.g., Central Hospital"
-                />
-              </label>
-              <label className="field">
-                <span>Service type</span>
-                <input
-                  value={newOffice.serviceType}
-                  onChange={(e) => setNewOffice({ ...newOffice, serviceType: e.target.value })}
-                  placeholder="Passport desk"
-                />
-              </label>
-              <div className="field-grid">
-                <label className="field">
-                  <span>Daily capacity</span>
-                  <input
-                    type="number"
-                    value={newOffice.dailyCapacity}
-                    onChange={(e) => setNewOffice({ ...newOffice, dailyCapacity: Number(e.target.value) })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Avg minutes / visitor</span>
-                  <input
-                    type="number"
-                    value={newOffice.avgServiceMinutes}
-                    onChange={(e) =>
-                      setNewOffice({ ...newOffice, avgServiceMinutes: Number(e.target.value) })
-                    }
-                  />
-                </label>
-              </div>
-              <label className="field">
-                <span>Operating hours</span>
-                <input
-                  value={newOffice.operatingHours}
-                  onChange={(e) => setNewOffice({ ...newOffice, operatingHours: e.target.value })}
-                  placeholder="09:00-17:00"
-                />
-              </label>
-              <div className="field-grid">
-                <label className="field">
-                  <span>Lat</span>
-                  <input
-                    value={newOffice.latitude}
-                    onChange={(e) => setNewOffice({ ...newOffice, latitude: e.target.value })}
-                    placeholder="optional"
-                  />
-                </label>
-                <label className="field">
-                  <span>Lng</span>
-                  <input
-                    value={newOffice.longitude}
-                    onChange={(e) => setNewOffice({ ...newOffice, longitude: e.target.value })}
-                    placeholder="optional"
-                  />
-                </label>
-              </div>
-              <label className="field">
-                <span>Admin key</span>
-                <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="x-admin-key" />
-              </label>
-              <button onClick={handleCreateOffice} disabled={isBusy}>
-                Create office
-              </button>
+      {view === 'login' ? (
+        <LoginView onSuccess={() => setView('customer')} onSwitch={() => setView('register')} />
+      ) : view === 'register' ? (
+        <RegisterView onSuccess={() => setView('customer')} onSwitch={() => setView('login')} />
+      ) : (
+        <div className="layout">
+          <aside className="panel">
+            <div className="view-toggle" style={{ marginBottom: 20 }}>
+              <button className={view === 'customer' ? 'active' : ''} onClick={() => setView('customer')}>Customer</button>
+              <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}>Admin</button>
             </div>
-          )}
-        </aside>
 
-        <main className="panel">
-          {!selectedOffice ? (
-            <div className="muted">Select an office to view details.</div>
-          ) : (
-            <>
-              <div className="panel-header">
-                <div>
-                  <div className="eyebrow">Office</div>
-                  <h3>{selectedOffice.name}</h3>
-                  <div className="muted">{selectedOffice.service_type}</div>
+            <div className="panel-header">
+              <h3>Offices</h3>
+              <button className="ghost" onClick={loadOffices} disabled={loading}>Refresh</button>
+            </div>
+            {loading && <div className="muted">Loading...</div>}
+            <div className="office-list">
+              {offices.map((office) => (
+                <button
+                  key={office.id}
+                  className={`office-card ${selectedOfficeId === office.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedOfficeId(office.id)}
+                >
+                  <div className="office-name">{office.name}</div>
+                  <div className="office-service">{office.service_type}</div>
+                  <div className="office-meta">
+                    <span>Avail: {office.available_today}</span>
+                    <span>Queue: {office.queueCount}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {view === 'admin' && (
+              <div className="panel-section">
+                <h4>Create Office</h4>
+                <div className="field-grid">
+                  <label>Name<input value={newOffice.name} onChange={e => setNewOffice({ ...newOffice, name: e.target.value })} /></label>
+                  <label>Service<input value={newOffice.serviceType} onChange={e => setNewOffice({ ...newOffice, serviceType: e.target.value })} /></label>
+                  <label>Capacity<input type="number" value={newOffice.dailyCapacity} onChange={e => setNewOffice({ ...newOffice, dailyCapacity: Number(e.target.value) })} /></label>
+                  <label>Lat<input value={newOffice.latitude} onChange={e => setNewOffice({ ...newOffice, latitude: e.target.value })} /></label>
+                  <label>Lng<input value={newOffice.longitude} onChange={e => setNewOffice({ ...newOffice, longitude: e.target.value })} /></label>
+                  <label>Key<input value={adminKey} onChange={e => setAdminKey(e.target.value)} /></label>
                 </div>
-                <div className="stat-group">
-                  <Stat label="Available today" value={selectedOffice.available_today} />
-                  <Stat label="Capacity" value={selectedOffice.daily_capacity} />
-                  <Stat label="Avg minutes" value={selectedOffice.avg_service_minutes} />
-                </div>
+                <button onClick={handleCreateOffice} disabled={isBusy}>Create</button>
               </div>
+            )}
+          </aside>
 
-              {view === 'customer' && (
-                <section className="panel-section">
-                  <h4>Book or join queue</h4>
-                  <div className="field-grid">
-                    <label className="field">
-                      <span>Your name</span>
-                      <input
-                        value={bookingForm.customerName}
-                        onChange={(e) => setBookingForm({ ...bookingForm, customerName: e.target.value })}
-                        placeholder="Jane Doe"
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Contact (SMS/email)</span>
-                      <input
-                        value={bookingForm.customerContact}
-                        onChange={(e) => setBookingForm({ ...bookingForm, customerContact: e.target.value })}
-                        placeholder="email or phone"
-                      />
-                    </label>
+          <main className="panel">
+            {!selectedOffice ? <div className="muted">Select office</div> : (
+              <>
+                <div className="panel-header">
+                  <h3>{selectedOffice.name}</h3>
+                  <div className="stat-group">
+                    <Stat label="Wait" value={`${selectedOffice.queueCount * selectedOffice.avg_service_minutes}m`} />
+                    <Stat label="Avail" value={selectedOffice.available_today} />
                   </div>
-                  <label className="field">
-                    <span>Note (optional)</span>
-                    <input
-                      value={bookingForm.note}
-                      onChange={(e) => setBookingForm({ ...bookingForm, note: e.target.value })}
-                      placeholder="Special needs, accessibility, etc."
-                    />
-                  </label>
-                  <button onClick={handleBooking} disabled={isBusy}>
-                    {selectedOffice.available_today > 0 ? 'Book now' : 'Join virtual queue'}
-                  </button>
-                </section>
-              )}
-
-              {view === 'admin' && (
-                <section className="panel-section">
-                  <h4>Live controls</h4>
-                  <div className="field-grid">
-                    <label className="field">
-                      <span>Available today</span>
-                      <input
-                        type="number"
-                        value={availabilityInput}
-                        onChange={(e) => setAvailabilityInput(e.target.value)}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Admin key</span>
-                      <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="x-admin-key" />
-                    </label>
-                  </div>
-                  <div className="button-row">
-                    <button onClick={handleAvailabilityUpdate} disabled={isBusy}>
-                      Update availability
-                    </button>
-                    <button onClick={callNext} disabled={isBusy}>
-                      Call next
-                    </button>
-                  </div>
-                </section>
-              )}
-
-              <section className="panel-section">
-                <h4>Queue</h4>
-                <div className="token-list">
-                  {officeTokens.length === 0 && <div className="muted">No tokens yet.</div>}
-                  {officeTokens.map((token) => (
-                    <TokenRow
-                      key={token.id}
-                      token={token}
-                      onCancel={(id) => updateToken(id, 'cancel')}
-                      onComplete={(id) => updateToken(id, 'complete')}
-                      onNoShow={(id) => updateToken(id, 'no-show')}
-                      isAdmin={view === 'admin'}
-                    />
-                  ))}
                 </div>
-              </section>
-            </>
-          )}
-        </main>
-      </div>
+
+                {view === 'customer' && (
+                  <section className="panel-section">
+                    <h4>Book Slot</h4>
+                    <div className="field-grid">
+                      <label>Name<input value={bookingForm.customerName} onChange={e => setBookingForm({ ...bookingForm, customerName: e.target.value })} /></label>
+                      <label>Contact<input value={bookingForm.customerContact} onChange={e => setBookingForm({ ...bookingForm, customerContact: e.target.value })} /></label>
+                    </div>
+                    <button onClick={handleBooking} disabled={isBusy}>
+                      {selectedOffice.available_today > 0 ? 'Book Now' : 'Join Queue'}
+                    </button>
+                  </section>
+                )}
+
+                {view === 'admin' && (
+                  <section className="panel-section">
+                    <h4>Admin Controls</h4>
+                    <div className="field-grid">
+                      <label>Availability<input type="number" value={availabilityInput} onChange={e => setAvailabilityInput(e.target.value)} /></label>
+                      <label>Key<input value={adminKey} onChange={e => setAdminKey(e.target.value)} /></label>
+                    </div>
+                    <div className="button-row">
+                      <button onClick={handleAvailabilityUpdate}>Update</button>
+                      <button onClick={callNext}>Call Next</button>
+                    </div>
+                  </section>
+                )}
+
+                <section className="panel-section">
+                  <h4>Queue Status</h4>
+                  <div className="token-list">
+                    {(selectedOfficeData?.tokens || []).map(t => (
+                      <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} isAdmin={view === 'admin'} />
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
+          </main>
+        </div>
+      )}
     </div>
   );
 }
 
 export default App;
+
+

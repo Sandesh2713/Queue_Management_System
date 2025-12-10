@@ -4,6 +4,8 @@ const morgan = require('morgan');
 const { v4: uuidv4 } = require('uuid');
 const dotenv = require('dotenv');
 const db = require('./db');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 dotenv.config();
 
@@ -11,6 +13,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 const adminKey = process.env.ADMIN_KEY || 'changeme-admin-key';
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const jwtSecret = process.env.JWT_SECRET || 'super-secret-jwt-key';
 
 app.use(cors({ origin: clientOrigin.split(',').map((s) => s.trim()), credentials: false }));
 app.use(express.json());
@@ -42,8 +45,8 @@ const officesStmt = {
 
 const tokensStmt = {
   insert: db.prepare(`
-    INSERT INTO tokens (id, office_id, user_name, user_contact, status, position, token_number, eta_minutes, note, created_at)
-    VALUES (@id, @office_id, @user_name, @user_contact, @status, @position, @token_number, @eta_minutes, @note, @created_at)
+    INSERT INTO tokens (id, office_id, user_name, user_contact, status, position, token_number, eta_minutes, note, created_at, user_id, lat, lng, travel_time_minutes)
+    VALUES (@id, @office_id, @user_name, @user_contact, @status, @position, @token_number, @eta_minutes, @note, @created_at, @user_id, @lat, @lng, @travel_time_minutes)
   `),
   getForOffice: db.prepare(`
     SELECT * FROM tokens
@@ -84,6 +87,24 @@ const tokensStmt = {
   `),
 };
 
+const usersStmt = {
+  insert: db.prepare(`
+    INSERT INTO users (id, name, email, password_hash, phone, created_at)
+    VALUES (@id, @name, @email, @password_hash, @phone, @created_at)
+  `),
+  getByEmail: db.prepare(`SELECT * FROM users WHERE email = ?`),
+  getById: db.prepare(`SELECT * FROM users WHERE id = ?`),
+};
+
+const notificationsStmt = {
+  insert: db.prepare(`
+    INSERT INTO notifications (id, user_id, message, is_read, created_at)
+    VALUES (@id, @user_id, @message, 0, @created_at)
+  `),
+  getForUser: db.prepare(`SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC`),
+  markRead: db.prepare(`UPDATE notifications SET is_read = 1 WHERE id = ?`),
+};
+
 const eventsStmt = {
   insert: db.prepare(`
     INSERT INTO queue_events (token_id, event, meta, created_at)
@@ -120,6 +141,32 @@ const recordEvent = (tokenId, event, meta = {}) => {
   });
 };
 
+const createNotification = (userId, message) => {
+  try {
+    notificationsStmt.insert.run({
+      id: uuidv4(),
+      user_id: userId,
+      message,
+      created_at: toIso(),
+    });
+  } catch (err) {
+    console.error('Failed to create notification', err);
+  }
+};
+
+const haversineDistance = (lat1, lon1, lat2, lon2) => {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
+  const toRad = (x) => (x * Math.PI) / 180;
+  const R = 6371; // km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: toIso() });
 });
@@ -145,6 +192,70 @@ app.post('/api/offices', requireAdmin, (req, res) => {
 
   officesStmt.insert.run(office);
   res.status(201).json({ office });
+});
+
+/* Auth Routes */
+app.post('/api/auth/register', (req, res) => {
+  const { name, email, password, phone } = req.body;
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Name, email, and password are required' });
+  }
+  const existing = usersStmt.getByEmail.get(email);
+  if (existing) {
+    return res.status(409).json({ error: 'Email already registered' });
+  }
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  const user = {
+    id: uuidv4(),
+    name,
+    email,
+    password_hash: hashedPassword,
+    phone: phone || '',
+    created_at: toIso(),
+  };
+  usersStmt.insert.run(user);
+  const token = jwt.sign({ id: user.id }, jwtSecret, { expiresIn: '30d' });
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
+  }
+  const user = usersStmt.getByEmail.get(email);
+  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  const token = jwt.sign({ id: user.id }, jwtSecret, { expiresIn: '30d' });
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'No token' });
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
+    const user = usersStmt.getById.get(decoded.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
+/* Notification Routes */
+app.get('/api/notifications', (req, res) => {
+  const userId = req.query.userId; // Simple query param for PoC (or use auth middleware)
+  if (!userId) return res.json({ notifications: [] });
+  const notifications = notificationsStmt.getForUser.all(userId);
+  res.json({ notifications });
+});
+
+app.post('/api/notifications/:id/read', (req, res) => {
+  notificationsStmt.markRead.run(req.params.id);
+  res.json({ success: true });
 });
 
 app.get('/api/offices', (req, res) => {
@@ -197,25 +308,36 @@ app.patch('/api/offices/:id/settings', requireAdmin, (req, res) => {
 
 app.post('/api/offices/:id/book', (req, res) => {
   const office = ensureOffice(req.params.id);
-  const { customerName, customerContact, note } = req.body;
+  const { customerName, customerContact, note, userId, userLat, userLng } = req.body;
   if (!customerName) {
     return res.status(400).json({ error: 'customerName is required' });
   }
 
   const tokenNumber = tokensStmt.getTokenNumberMax.get(office.id).maxNum + 1;
+  const travelTimeMinutes = haversineDistance(Number(userLat), Number(userLng), office.latitude, office.longitude)
+    ? Math.ceil(haversineDistance(Number(userLat), Number(userLng), office.latitude, office.longitude) * 2) // 2 min per km (approx 30km/h)
+    : null;
+
+  const baseToken = {
+    id: uuidv4(),
+    office_id: office.id,
+    user_name: customerName,
+    user_contact: customerContact || '',
+    note: note || '',
+    token_number: tokenNumber,
+    created_at: toIso(),
+    user_id: userId || null,
+    lat: userLat || null,
+    lng: userLng || null,
+    travel_time_minutes: travelTimeMinutes,
+  };
 
   if (office.available_today > 0) {
     const token = {
-      id: uuidv4(),
-      office_id: office.id,
-      user_name: customerName,
-      user_contact: customerContact || '',
+      ...baseToken,
       status: 'booked',
       position: null,
-      token_number: tokenNumber,
-      eta_minutes: 0,
-      note: note || '',
-      created_at: toIso(),
+      eta_minutes: travelTimeMinutes || 0, // Arrival time is travel time
     };
     const newAvailable = office.available_today - 1;
     const txn = db.transaction(() => {
@@ -228,22 +350,16 @@ app.post('/api/offices/:id/book', (req, res) => {
   }
 
   const position = tokensStmt.getQueuedMaxPosition.get(office.id).maxPos + 1;
-  const eta = Math.max(position, 1) * (office.avg_service_minutes || 10);
+  const queueWait = Math.max(position, 1) * (office.avg_service_minutes || 10);
   const token = {
-    id: uuidv4(),
-    office_id: office.id,
-    user_name: customerName,
-    user_contact: customerContact || '',
+    ...baseToken,
     status: 'queued',
     position,
-    token_number: tokenNumber,
-    eta_minutes: eta,
-    note: note || '',
-    created_at: toIso(),
+    eta_minutes: queueWait,
   };
   const txn = db.transaction(() => {
     tokensStmt.insert.run(token);
-    recordEvent(token.id, 'queued', { position, eta_minutes: eta });
+    recordEvent(token.id, 'queued', { position, eta_minutes: queueWait });
   });
   txn();
   return res.status(201).json({ token, message: 'Added to virtual queue' });
@@ -265,29 +381,55 @@ app.post('/api/offices/:id/call-next', requireAdmin, (req, res) => {
     return res.status(404).json({ error: 'No tokens to call' });
   }
 
-  if (chosen.status === 'queued') {
-    if (office.available_today <= 0) {
-      return res.status(409).json({ error: 'No seats freed yet to call queued users' });
+  const activateToken = (t) => {
+    if (t.status === 'queued') {
+      if (office.available_today <= 0) {
+        throw new Error('No seats freed yet to call queued users');
+      }
+      officesStmt.updateAvailability.run({ id: office.id, available_today: office.available_today - 1 });
     }
-    const newAvailable = office.available_today - 1;
-    const txn = db.transaction(() => {
-      officesStmt.updateAvailability.run({ id: office.id, available_today: newAvailable });
-      tokensStmt.updateStatus.run({
-        id: chosen.id,
-        status: 'called',
-        called_at: toIso(),
-        position: null,
-      });
-      recordEvent(chosen.id, 'called', { via: 'queue' });
-    });
-    txn();
-  } else {
     tokensStmt.updateStatus.run({
-      id: chosen.id,
+      id: t.id,
       status: 'called',
       called_at: toIso(),
+      position: null,
     });
-    recordEvent(chosen.id, 'called', { via: 'booked' });
+    recordEvent(t.id, 'called', { via: t.status });
+
+    // Check helpers logic: Notify UPCOMING tokens in queue
+    // We fetch top 5 queued tokens and check if they are approaching
+    const queuedTokens = db.prepare(`
+      SELECT * FROM tokens WHERE office_id = ? AND status = 'queued' ORDER BY position ASC LIMIT 5
+    `).all(office.id);
+
+    queuedTokens.forEach((qt) => {
+      // Recalculate queue wait based on new position relative to head
+      // Simple approx: (qt.position - 1) * avg_minutes
+      // But since we just called one, the queue moved.
+      // Actually simpler: just check eta_minutes logic from DB? No, DB eta is static.
+      // Dynamic check:
+      const msUntilServe = (qt.position - 1) * (office.avg_service_minutes || 10);
+      const travel = qt.travel_time_minutes || 15; // default 15 min travel buffer
+      const buffer = msUntilServe - travel;
+
+      if (buffer <= 20 && qt.user_id) { // Notify if margin is small (e.g. < 20 mins slack)
+        const check = db.prepare(`SELECT 1 FROM notifications WHERE user_id = ? AND message LIKE 'Your turn%'`).get(qt.user_id);
+        if (!check) {
+          createNotification(qt.user_id, `Your turn at ${office.name} is approaching! Please head to the office.`);
+        }
+      }
+    });
+
+    if (t.user_id) {
+      createNotification(t.user_id, `You have been called at ${office.name}. Please proceed to the desk.`);
+    }
+  };
+
+  try {
+    const txn = db.transaction(() => activateToken(chosen));
+    txn();
+  } catch (err) {
+    return res.status(409).json({ error: err.message });
   }
 
   chosen = tokensStmt.getById.get(chosen.id);

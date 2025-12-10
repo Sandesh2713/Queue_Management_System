@@ -26,9 +26,19 @@ CREATE TABLE IF NOT EXISTS offices (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  phone TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tokens (
   id TEXT PRIMARY KEY,
   office_id TEXT NOT NULL,
+  user_id TEXT,
   user_name TEXT NOT NULL,
   user_contact TEXT,
   status TEXT NOT NULL,
@@ -39,7 +49,11 @@ CREATE TABLE IF NOT EXISTS tokens (
   created_at TEXT NOT NULL,
   called_at TEXT,
   completed_at TEXT,
-  FOREIGN KEY (office_id) REFERENCES offices(id)
+  lat REAL,
+  lng REAL,
+  travel_time_minutes INTEGER,
+  FOREIGN KEY (office_id) REFERENCES offices(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS queue_events (
@@ -50,7 +64,22 @@ CREATE TABLE IF NOT EXISTS queue_events (
   created_at TEXT NOT NULL,
   FOREIGN KEY (token_id) REFERENCES tokens(id)
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  message TEXT NOT NULL,
+  is_read INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
 `);
+
+// Migrations for existing tables
+try { db.exec(`ALTER TABLE tokens ADD COLUMN user_id TEXT REFERENCES users(id)`); } catch (e) {}
+try { db.exec(`ALTER TABLE tokens ADD COLUMN lat REAL`); } catch (e) {}
+try { db.exec(`ALTER TABLE tokens ADD COLUMN lng REAL`); } catch (e) {}
+try { db.exec(`ALTER TABLE tokens ADD COLUMN travel_time_minutes INTEGER`); } catch (e) {}
 
 module.exports = db;
 

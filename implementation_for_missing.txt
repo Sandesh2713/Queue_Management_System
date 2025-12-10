@@ -1,0 +1,47 @@
+Implementation Plan - Queue Management System Completion
+This plan addresses the missing requirements: Customer Registration (Auth), Automated Reminders, and Distance-based Timing.
+
+User Review Required
+NOTE
+
+Notification Channel: Without an external SMS/Email provider (like Twilio/SendGrid), I will implement an In-App Notification System. Messages will be stored in the database and displayed in a "Notifications" panel in the app. This simulates the logic of sending alerts without needing API keys.
+
+Proposed Changes
+Backend (backend/)
+[MODIFY] 
+server.js
+Add users routes (/api/auth/register, /api/auth/login).
+Update POST /api/offices/:id/book:
+Accept userId (optional, if logged in) and userLat/userLng.
+Calculate travelTime using Haversine formula if coordinates provided.
+Store total_eta = queue_wait + travel_time.
+Add notification logic:
+On call-next or book, assume a check runs.
+If 
+(eta - travel_time) <= 15 minutes
+, create a "Token Approaching" notification.
+[MODIFY] 
+db.js
+Create table users (id, email, password_hash, name, phone).
+Create table notifications (id, user_id, message, is_read, created_at).
+Alter tokens table to add user_id (foreign key), lat, lng, travel_time_minutes.
+Frontend (frontend/)
+[NEW] 
+AuthContext.jsx
+Manage user session (login/logout state).
+[MODIFY] 
+App.jsx
+Top Bar: Add "Login" / "My Profile" buttons.
+Views: Add LoginView and RegisterView.
+Booking Flow:
+If logged in, auto-fill details.
+Request browser Geolocation permissions to send coordinates.
+Notifications: Add a bell icon/panel to show messages from the backend.
+Verification Plan
+Manual Verification
+Auth: Register a new user "John Doe". Log out and Log in.
+Geolocation: Book a token. Inspect the backend logs/response to see travel_time_minutes calculated based on a fixed "Office" location and simulated "User" location.
+Notifications:
+Book a token far in the queue (ETA > 30m).
+As Admin, "Call Next" repeatedly until John Doe is near.
+Verify John Doe receives a notification "Your turn is approaching".
