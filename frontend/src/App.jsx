@@ -581,11 +581,19 @@ function App() {
                 <div className="panel-header">
                   <h3>{selectedOffice.name}</h3>
                   <div className="stat-group">
-                    <Stat label="Wait" value={
-                      (selectedOffice.queueCount * selectedOffice.avg_service_minutes) > 0
-                        ? `${selectedOffice.queueCount * selectedOffice.avg_service_minutes}m`
-                        : 'Access Allowed'
-                    } />
+                    {view === 'admin' ? (
+                      <Stat label="Current Token" value={
+                        (selectedOfficeData?.tokens || [])
+                          .filter(t => t.status === 'called')
+                          .sort((a, b) => (new Date(b.called_at || 0) - new Date(a.called_at || 0)))[0]?.token_number || '--'
+                      } />
+                    ) : (
+                      <Stat label="Wait" value={
+                        (selectedOffice.queueCount * selectedOffice.avg_service_minutes) > 0
+                          ? `${selectedOffice.queueCount * selectedOffice.avg_service_minutes}m`
+                          : 'Access Allowed'
+                      } />
+                    )}
                     <Stat label="Avail" value={selectedOffice.available_today} />
                   </div>
                 </div>
