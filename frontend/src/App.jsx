@@ -35,7 +35,7 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser 
         <div className="token-meta">
           {token.user_name} · {token.status}
           {token.position ? ` · pos ${token.position}` : ''}
-          {(token.travel_time_minutes && token.status !== 'booked') ? ` · ${token.travel_time_minutes} min away` : ''}
+
         </div>
       </div>
       <div className="token-actions">
