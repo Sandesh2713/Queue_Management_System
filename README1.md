@@ -40,3 +40,4 @@ Open http://localhost:5173. In the Admin tab, paste the same admin key you set i
 - Confirm you are calling the right API URL. Default frontend base: `http://localhost:4000`. To change, set `VITE_API_BASE` in `/frontend/.env`.
 - Header name must be exactly `x-admin-key`.
 
+
