@@ -464,7 +464,15 @@ app.post('/api/tokens/:id/cancel', (req, res) => {
 
   const txn = db.transaction(() => {
     officesStmt.updateAvailability.run({ id: office.id, available_today: availability });
-    tokensStmt.updateStatus.run({ id: token.id, status: 'cancelled' });
+    tokensStmt.updateStatus.run({
+      id: token.id,
+      status: 'cancelled',
+      called_at: null,
+      completed_at: null,
+      note: null,
+      eta_minutes: null,
+      position: null
+    });
     recordEvent(token.id, 'cancelled');
   });
   txn();
@@ -484,7 +492,15 @@ app.post('/api/tokens/:id/complete', requireAdmin, (req, res) => {
   }
   const txn = db.transaction(() => {
     officesStmt.updateAvailability.run({ id: office.id, available_today: availability });
-    tokensStmt.updateStatus.run({ id: token.id, status: 'completed', completed_at: toIso() });
+    tokensStmt.updateStatus.run({
+      id: token.id,
+      status: 'completed',
+      completed_at: toIso(),
+      called_at: null,
+      note: null,
+      eta_minutes: null,
+      position: null
+    });
     recordEvent(token.id, 'completed');
   });
   txn();
@@ -503,7 +519,15 @@ app.post('/api/tokens/:id/no-show', requireAdmin, (req, res) => {
   }
   const txn = db.transaction(() => {
     officesStmt.updateAvailability.run({ id: office.id, available_today: availability });
-    tokensStmt.updateStatus.run({ id: token.id, status: 'no-show', completed_at: toIso() });
+    tokensStmt.updateStatus.run({
+      id: token.id,
+      status: 'no-show',
+      completed_at: toIso(),
+      called_at: null,
+      note: null,
+      eta_minutes: null,
+      position: null
+    });
     recordEvent(token.id, 'no-show');
   });
   txn();
