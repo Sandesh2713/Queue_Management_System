@@ -580,7 +580,11 @@ function App() {
                 <div className="panel-header">
                   <h3>{selectedOffice.name}</h3>
                   <div className="stat-group">
-                    <Stat label="Wait" value={`${selectedOffice.queueCount * selectedOffice.avg_service_minutes}m`} />
+                    <Stat label="Wait" value={
+                      (selectedOffice.queueCount * selectedOffice.avg_service_minutes) > 0
+                        ? `${selectedOffice.queueCount * selectedOffice.avg_service_minutes}m`
+                        : 'Access Allowed'
+                    } />
                     <Stat label="Avail" value={selectedOffice.available_today} />
                   </div>
                 </div>
@@ -620,9 +624,16 @@ function App() {
                 <section className="panel-section">
                   <h4>Queue Status</h4>
                   <div className="token-list">
-                    {(selectedOfficeData?.tokens || []).map(t => (
-                      <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} isAdmin={view === 'admin'} currentUser={user} />
-                    ))}
+                    {(selectedOfficeData?.tokens || [])
+                      .filter(t => view === 'admin' || t.user_id === user?.id)
+                      .map(t => (
+                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} isAdmin={view === 'admin'} currentUser={user} />
+                      ))}
+                    {view === 'customer' && (selectedOfficeData?.tokens || []).filter(t => t.user_id === user?.id).length === 0 && (
+                      <div className="muted" style={{ textAlign: 'center', padding: '20px' }}>
+                        You are not in the queue. Book a slot to get a token.
+                      </div>
+                    )}
                   </div>
                 </section>
               </>

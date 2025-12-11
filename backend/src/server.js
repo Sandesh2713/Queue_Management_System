@@ -288,7 +288,9 @@ app.get('/api/offices', (req, res) => {
 app.get('/api/offices/:id', (req, res) => {
   const office = ensureOffice(req.params.id);
   const tokens = tokensStmt.getForOffice.all(office.id);
-  res.json({ office, tokens });
+  const queueCount = tokens.filter(t => t.status === 'queued').length;
+  const inProgressCount = tokens.filter(t => ['booked', 'called'].includes(t.status)).length;
+  res.json({ office: { ...office, queueCount, inProgressCount }, tokens });
 });
 
 app.patch('/api/offices/:id/availability', requireAdmin, (req, res) => {
