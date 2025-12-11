@@ -372,10 +372,10 @@ function App() {
 
       {message && <div className="message">{message}</div>}
 
-      {view === 'login' ? (
-        <LoginView onSuccess={() => setView('customer')} onSwitch={() => setView('register')} />
+      {view === 'login' || (!user && view !== 'register') ? (
+        <LoginView onSuccess={() => { }} onSwitch={() => setView('register')} />
       ) : view === 'register' ? (
-        <RegisterView onSuccess={() => setView('customer')} onSwitch={() => setView('login')} />
+        <RegisterView onSuccess={() => { }} onSwitch={() => setView('login')} />
       ) : (
         <div className="layout">
           <aside className="panel">
