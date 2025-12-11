@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext';
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
 async function fetchJSON(path, options = {}) {
-  const token = localStorage.getItem('token');
+  const token = sessionStorage.getItem('token');
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -170,7 +170,8 @@ function NotificationPanel({ userId, onClose }) {
 
 function App() {
   const { user, logout, loading: authLoading } = useAuth();
-  const [view, setView] = useState('customer'); // customer | admin | login | register
+  // Enforce login gate: if not logged in, default to 'login'
+  const [view, setView] = useState(user ? 'customer' : 'login'); // customer | admin | login | register
   const [offices, setOffices] = useState([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
   const [selectedOfficeData, setSelectedOfficeData] = useState(null);
@@ -206,6 +207,13 @@ function App() {
   useEffect(() => {
     if (user) {
       setBookingForm((prev) => ({ ...prev, customerName: user.name, customerContact: user.email }));
+      // If we were on login/register pages, switch to customer view
+      if (view === 'login' || view === 'register') {
+        setView('customer');
+      }
+    } else {
+      // If logged out, force login view
+      setView('login');
     }
   }, [user]);
 
