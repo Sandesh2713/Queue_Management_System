@@ -202,6 +202,14 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [adminKey, setAdminKey] = useState('');
+
+  // Auto-dismiss message after 15 seconds
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(''), 15000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
 
@@ -346,7 +354,14 @@ function App() {
     try {
       let headers = action !== 'cancel' ? { 'x-admin-key': adminKey } : {};
       await fetchJSON(`/api/tokens/${id}/${action}`, { method: 'POST', headers });
-      setMessage(`Token ${action}d`);
+
+      const verbs = {
+        'cancel': 'cancelled',
+        'complete': 'completed',
+        'no-show': 'marked as no-show'
+      };
+
+      setMessage(`Token ${verbs[action] || action}`);
       fetchOfficeDetail(selectedOfficeId);
     } catch (err) { setMessage(err.message); }
   };
