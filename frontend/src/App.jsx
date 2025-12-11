@@ -91,12 +91,13 @@ function RegisterView({ onSuccess, onSwitch }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [role, setRole] = useState('customer');
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await register(name, email, password, phone);
+      await register(name, email, password, phone, role);
       onSuccess();
     } catch (err) {
       setError(err.message);
@@ -123,6 +124,13 @@ function RegisterView({ onSuccess, onSwitch }) {
         <label className="field">
           <span>Phone (optional)</span>
           <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Account Type</span>
+          <select value={role} onChange={(e) => setRole(e.target.value)} style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)' }}>
+            <option value="customer">Customer</option>
+            <option value="admin">Admin (Office Manager)</option>
+          </select>
         </label>
         <button type="submit">Register</button>
       </form>
@@ -153,17 +161,23 @@ function NotificationPanel({ userId, onClose }) {
         <h4>Notifications</h4>
         <button className="ghost" onClick={onClose}>Close</button>
       </div>
-      {notifications.length === 0 && <div className="notification-empty">No notifications</div>}
-      {notifications.map((n) => (
-        <div
-          key={n.id}
-          className={`notification-item ${n.is_read ? '' : 'unread'}`}
-          onClick={() => markRead(n.id)}
-        >
-          <div>{n.message}</div>
-          {!n.is_read && <div className="notification-mark">Mark read</div>}
-        </div>
-      ))}
+      <div className="notification-list-container">
+        {notifications.length === 0 && <div className="notification-empty">No notifications</div>}
+        {notifications.map((n) => (
+          <div
+            key={n.id}
+            className={`notification-item ${n.is_read ? '' : 'unread'}`}
+            onClick={() => markRead(n.id)}
+          >
+            <div className="notification-content">
+              <div>{n.message}</div>
+              {/* Simulated timestamp if missing */}
+              <div className="notification-time">Just now</div>
+            </div>
+            {!n.is_read && <div className="notification-mark">✓</div>}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -171,7 +185,7 @@ function NotificationPanel({ userId, onClose }) {
 function App() {
   const { user, logout, loading: authLoading } = useAuth();
   // Enforce login gate: if not logged in, default to 'login'
-  const [view, setView] = useState(user ? 'customer' : 'login'); // customer | admin | login | register
+  const [view, setView] = useState(user ? (user.role === 'admin' ? 'admin' : 'customer') : 'login');
   const [offices, setOffices] = useState([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
   const [selectedOfficeData, setSelectedOfficeData] = useState(null);
@@ -207,9 +221,9 @@ function App() {
   useEffect(() => {
     if (user) {
       setBookingForm((prev) => ({ ...prev, customerName: user.name, customerContact: user.email }));
-      // If we were on login/register pages, switch to customer view
+      // If we were on login/register pages, switch to assigned role view
       if (view === 'login' || view === 'register') {
-        setView('customer');
+        setView(user.role === 'admin' ? 'admin' : 'customer');
       }
     } else {
       // If logged out, force login view
@@ -366,8 +380,8 @@ function App() {
         <div className="layout">
           <aside className="panel">
             <div className="view-toggle" style={{ marginBottom: 20 }}>
-              <button className={view === 'customer' ? 'active' : ''} onClick={() => setView('customer')}>Customer</button>
-              <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}>Admin</button>
+              {/* Role-based: show only relevant view or both if dual-role (simplified to strict separation) */}
+              <div className="eyebrow" style={{ marginBottom: 0 }}>Logged in as {user.role}</div>
             </div>
 
             <div className="panel-header">
@@ -464,5 +478,3 @@ function App() {
 }
 
 export default App;
-
-

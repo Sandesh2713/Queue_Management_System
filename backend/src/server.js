@@ -89,8 +89,8 @@ const tokensStmt = {
 
 const usersStmt = {
   insert: db.prepare(`
-    INSERT INTO users (id, name, email, password_hash, phone, created_at)
-    VALUES (@id, @name, @email, @password_hash, @phone, @created_at)
+    INSERT INTO users (id, name, email, password_hash, phone, role, created_at)
+    VALUES (@id, @name, @email, @password_hash, @phone, @role, @created_at)
   `),
   getByEmail: db.prepare(`SELECT * FROM users WHERE email = ?`),
   getById: db.prepare(`SELECT * FROM users WHERE id = ?`),
@@ -126,10 +126,20 @@ const ensureOffice = (id) => {
 };
 
 const requireAdmin = (req, res, next) => {
-  if (req.headers['x-admin-key'] !== adminKey) {
-    return res.status(401).json({ error: 'Invalid admin key' });
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'No token' });
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
+    const user = usersStmt.getById.get(decoded.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
   }
-  return next();
 };
 
 const recordEvent = (tokenId, event, meta = {}) => {
@@ -196,9 +206,12 @@ app.post('/api/offices', requireAdmin, (req, res) => {
 
 /* Auth Routes */
 app.post('/api/auth/register', (req, res) => {
-  const { name, email, password, phone } = req.body;
+  const { name, email, password, phone, role } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email, and password are required' });
+  }
+  if (role && !['customer', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
   }
   const existing = usersStmt.getByEmail.get(email);
   if (existing) {
@@ -211,11 +224,12 @@ app.post('/api/auth/register', (req, res) => {
     email,
     password_hash: hashedPassword,
     phone: phone || '',
+    role: role || 'customer',
     created_at: toIso(),
   };
   usersStmt.insert.run(user);
   const token = jwt.sign({ id: user.id }, jwtSecret, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -228,7 +242,7 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
   const token = jwt.sign({ id: user.id }, jwtSecret, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
 app.get('/api/auth/me', (req, res) => {
@@ -239,7 +253,7 @@ app.get('/api/auth/me', (req, res) => {
     const decoded = jwt.verify(token, jwtSecret);
     const user = usersStmt.getById.get(decoded.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: { id: user.id, name: user.name, email: user.email } });
+    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });
   }

@@ -283,51 +283,6 @@ button.ghost.danger:hover {
   box-shadow: var(--shadow-sm);
 }
 
-/* Auth & Login Pages */
-.auth-container {
-  max-width: 420px;
-  margin: 60px auto;
-  padding: 40px;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.auth-container h2 {
-  font-size: 28px;
-  color: var(--gray-900);
-  text-align: center;
-  margin-bottom: 8px;
-}
-
-.auth-container form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.auth-toggle {
-  background: none;
-  color: var(--primary-600);
-  font-weight: 500;
-  padding: 0;
-  box-shadow: none;
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.auth-toggle:hover {
-  color: var(--primary-700);
-  text-decoration: underline;
-  background: none;
-  transform: none;
-}
-
 /* Notifications & Menu */
 .user-menu {
   display: flex;
@@ -336,32 +291,32 @@ button.ghost.danger:hover {
 }
 
 .bell-icon {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   cursor: pointer;
   position: relative;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--gray-600);
-  background: #fff;
-  border: 1px solid var(--gray-200);
+  background: transparent;
 }
 
 .bell-icon:hover {
-  background: var(--gray-50);
+  background: var(--primary-50);
   color: var(--primary-600);
+  transform: rotate(15deg);
 }
 
 .bell-count {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: 4px;
+  right: 4px;
   background: var(--danger);
   color: white;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   height: 18px;
   min-width: 18px;
@@ -370,62 +325,134 @@ button.ghost.danger:hover {
   justify-content: center;
   border-radius: 9px;
   border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .notification-panel {
   position: absolute;
   top: 70px;
   right: 24px;
-  width: 360px;
-  background: #fff;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--gray-100);
-  z-index: 100;
-  max-height: 500px;
-  overflow: hidden;
+  width: 380px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 24px;
+  box-shadow:
+    0 20px 50px -10px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  z-index: 1000;
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
-  animation: slideIn 0.2s ease-out;
+  animation: panelSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top right;
+  overflow: hidden;
 }
 
-@keyframes slideIn {
+.panel-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.panel-header h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+@keyframes panelSlide {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: scale(0.95) translateY(-20px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1) translateY(0);
   }
 }
 
+.notification-list-container {
+  overflow-y: auto;
+  padding: 8px;
+}
+
+/* Custom Scrollbar */
+.notification-list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-list-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
 .notification-item {
+  margin: 4px;
   padding: 16px;
-  border-bottom: 1px solid var(--gray-100);
+  border-radius: 16px;
   font-size: 14px;
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: start;
   justify-content: space-between;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .notification-item:hover {
-  background: var(--gray-50);
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .notification-item.unread {
-  background: var(--primary-50);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  border-left: 4px solid var(--primary-500);
+}
+
+.notification-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notification-time {
+  font-size: 11px;
+  color: var(--gray-400);
+  font-weight: 500;
 }
 
 .notification-mark {
-  font-size: 11px;
+  padding: 6px;
+  border-radius: 50%;
   color: var(--primary-600);
-  font-weight: 600;
-  white-space: nowrap;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.notification-item:hover .notification-mark {
+  opacity: 1;
+  background: var(--primary-50);
+}
+
+.notification-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--gray-500);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.notification-empty::before {
+  content: '🔕';
+  font-size: 32px;
+  opacity: 0.5;
+  margin-bottom: 8px;
 }
 
 /* Token List */

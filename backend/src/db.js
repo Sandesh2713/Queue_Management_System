@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   phone TEXT,
+  role TEXT DEFAULT 'customer',
   created_at TEXT NOT NULL
 );
 
@@ -76,10 +77,11 @@ CREATE TABLE IF NOT EXISTS notifications (
 `);
 
 // Migrations for existing tables
-try { db.exec(`ALTER TABLE tokens ADD COLUMN user_id TEXT REFERENCES users(id)`); } catch (e) {}
-try { db.exec(`ALTER TABLE tokens ADD COLUMN lat REAL`); } catch (e) {}
-try { db.exec(`ALTER TABLE tokens ADD COLUMN lng REAL`); } catch (e) {}
-try { db.exec(`ALTER TABLE tokens ADD COLUMN travel_time_minutes INTEGER`); } catch (e) {}
+try { db.exec(`ALTER TABLE tokens ADD COLUMN user_id TEXT REFERENCES users(id)`); } catch (e) { }
+try { db.exec(`ALTER TABLE tokens ADD COLUMN lat REAL`); } catch (e) { }
+try { db.exec(`ALTER TABLE tokens ADD COLUMN lng REAL`); } catch (e) { }
+try { db.exec(`ALTER TABLE tokens ADD COLUMN travel_time_minutes INTEGER`); } catch (e) { }
+try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'customer'`); } catch (e) { }
 
 module.exports = db;
 
