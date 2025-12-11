@@ -557,8 +557,20 @@ button.ghost.danger:hover {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 50%, #f0f9ff 0%, #ffffff 100%);
+  background: linear-gradient(90deg, #ffffff 0%, #e0f2fe 50%, #ffffff 100%);
+  background-size: 200% 100%;
+  animation: gradientMove 8s ease-in-out infinite alternate;
   font-family: 'Inter', sans-serif;
+}
+
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 100% 50%;
+  }
 }
 
 .landing-header {
@@ -639,15 +651,15 @@ button.ghost.danger:hover {
 }
 
 .signup-prompt {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--gray-500);
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .signup-prompt .link {
   color: #10b981;
-  /* Green link color from design */
   font-weight: 600;
+  /* Green link color from design */
   cursor: pointer;
 }
 
