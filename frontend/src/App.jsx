@@ -351,6 +351,7 @@ function App() {
   const [bookingForm, setBookingForm] = useState({ customerName: user?.name || '', customerContact: user?.email || '', serviceType: 'General Inquiry', note: '' });
   const [availabilityInput, setAvailabilityInput] = useState('');
   const [isBusy, setIsBusy] = useState(false);
+  const [tokenFilter, setTokenFilter] = useState('active'); // 'active' | 'history'
 
   const selectedOffice = useMemo(() => selectedOfficeData?.office || null, [selectedOfficeData]);
 
@@ -623,17 +624,46 @@ function App() {
 
                 <section className="panel-section">
                   <h4>Queue Status</h4>
+                  {view === 'customer' && (
+                    <div className="tabs" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                      <button
+                        className={tokenFilter === 'active' ? 'primary small' : 'ghost small'}
+                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'active' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'active' ? '#fff' : 'inherit' }}
+                        onClick={() => setTokenFilter('active')}
+                      >
+                        Active
+                      </button>
+                      <button
+                        className={tokenFilter === 'history' ? 'primary small' : 'ghost small'}
+                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'history' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'history' ? '#fff' : 'inherit' }}
+                        onClick={() => setTokenFilter('history')}
+                      >
+                        History
+                      </button>
+                    </div>
+                  )}
                   <div className="token-list">
                     {(selectedOfficeData?.tokens || [])
-                      .filter(t => view === 'admin' || t.user_id === user?.id)
+                      .filter(t => {
+                        if (view === 'admin') return true;
+                        const isMine = t.user_id === user?.id;
+                        if (!isMine) return false;
+                        if (tokenFilter === 'active') return ['booked', 'queued', 'called'].includes(t.status);
+                        return ['completed', 'cancelled', 'no-show'].includes(t.status);
+                      })
                       .map(t => (
                         <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} isAdmin={view === 'admin'} currentUser={user} />
                       ))}
-                    {view === 'customer' && (selectedOfficeData?.tokens || []).filter(t => t.user_id === user?.id).length === 0 && (
-                      <div className="muted" style={{ textAlign: 'center', padding: '20px' }}>
-                        You are not in the queue. Book a slot to get a token.
-                      </div>
-                    )}
+                    {view === 'customer' && (selectedOfficeData?.tokens || []).filter(t => {
+                      const isMine = t.user_id === user?.id;
+                      if (!isMine) return false;
+                      if (tokenFilter === 'active') return ['booked', 'queued', 'called'].includes(t.status);
+                      return ['completed', 'cancelled', 'no-show'].includes(t.status);
+                    }).length === 0 && (
+                        <div className="muted" style={{ textAlign: 'center', padding: '20px' }}>
+                          {tokenFilter === 'active' ? 'You are not in the queue. Book a slot!' : 'No past tokens found.'}
+                        </div>
+                      )}
                   </div>
                 </section>
               </>
