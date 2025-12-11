@@ -551,3 +551,106 @@ button.ghost.danger:hover {
     align-items: flex-start;
   }
 }
+
+/* Landing Page */
+.landing-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 50%, #f0f9ff 0%, #ffffff 100%);
+  font-family: 'Inter', sans-serif;
+}
+
+.landing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 48px;
+}
+
+.landing-header .brand {
+  font-size: 20px;
+  color: #000;
+}
+
+.landing-nav {
+  display: flex;
+  gap: 16px;
+}
+
+.landing-content {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  /* Vertical center */
+  gap: 120px;
+  /* Increased gap for separation like design */
+  padding: 40px;
+}
+
+.landing-card {
+  flex: 1;
+  max-width: 500px;
+  text-align: center;
+  padding: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+.landing-card h2,
+.landing-card h3 {
+  font-size: 36px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.landing-card p {
+  color: var(--gray-500);
+  line-height: 1.6;
+  font-size: 18px;
+  margin: 0;
+  max-width: 360px;
+  /* Force wrap for cleaner look */
+}
+
+.landing-card button {
+  width: 180px;
+  padding: 21px 24px;
+  font-size: 18px;
+  background: #000;
+  color: #fff;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.role-badge {
+  background: #000;
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  font-style: italic;
+  /* Matching design */
+}
+
+.signup-prompt {
+  font-size: 14px;
+  color: var(--gray-500);
+  margin-top: 16px;
+}
+
+.signup-prompt .link {
+  color: #10b981;
+  /* Green link color from design */
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.signup-prompt .link:hover {
+  text-decoration: underline;
+}

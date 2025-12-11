@@ -95,13 +95,13 @@ function LoginView({ onSuccess, onSwitch }) {
   );
 }
 
-function RegisterView({ onSuccess, onSwitch }) {
+function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer' }) {
   const { register } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('customer');
+  const [role, setRole] = useState(defaultRole);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
@@ -145,6 +145,43 @@ function RegisterView({ onSuccess, onSwitch }) {
         <button type="submit">Register</button>
       </form>
       <button className="auth-toggle" onClick={onSwitch}>Have an account? Login</button>
+    </div>
+  );
+}
+
+function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
+  return (
+    <div className="landing-container">
+      <header className="landing-header">
+        <div className="brand">
+          <span style={{ fontWeight: 800 }}>Get Easy</span> 🌱
+        </div>
+        <div className="landing-nav">
+          <button className="ghost small" onClick={onLogin}>Log in</button>
+          <button className="primary small" onClick={onRegisterCustomer}>Create a free account</button>
+        </div>
+      </header>
+
+      <div className="landing-content">
+        <div className="landing-card">
+
+          <h2>For <i>Companies</i></h2>
+          <p>Your people, your business, your growth - beautifully managed.</p>
+          <button onClick={onLogin}>Login</button>
+          <div className="signup-prompt">
+            Don't have an account? <span onClick={onRegisterAdmin} className="link">Sign up.</span>
+          </div>
+        </div>
+
+        <div className="landing-card">
+          <h3>For <i>Customers</i></h3>
+          <p>Join us and experience smoother services, every step of the way.</p>
+          <button onClick={onLogin}>Login</button>
+          <div className="signup-prompt">
+            Don't have an account? <span onClick={onRegisterCustomer} className="link">Sign up.</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -327,8 +364,9 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
 
 function App() {
   const { user, logout, loading: authLoading } = useAuth();
-  // Enforce login gate: if not logged in, default to 'login'
-  const [view, setView] = useState(user ? (user.role === 'admin' ? 'admin' : 'customer') : 'login');
+  // Enforce login gate: if not logged in, default to 'landing'
+  const [view, setView] = useState(user ? (user.role === 'admin' ? 'admin' : 'customer') : 'landing');
+  const [registerRole, setRegisterRole] = useState('customer');
   const [offices, setOffices] = useState([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
   const [selectedOfficeData, setSelectedOfficeData] = useState(null);
@@ -378,8 +416,8 @@ function App() {
         setView(user.role === 'admin' ? 'admin' : 'customer');
       }
     } else {
-      // If logged out, force login view
-      setView('login');
+      // If logged out, force landing view (unless already on login/register)
+      if (view !== 'login' && view !== 'register') setView('landing');
     }
   }, [user]);
 
@@ -496,6 +534,19 @@ function App() {
 
   if (authLoading) return <div>Loading app...</div>;
 
+  if (view === 'landing' && !user) {
+    return (
+      <>
+        {message && <div className="message">{message}</div>}
+        <LandingView
+          onLogin={() => setView('login')}
+          onRegisterAdmin={() => { setRegisterRole('admin'); setView('register'); }}
+          onRegisterCustomer={() => { setRegisterRole('customer'); setView('register'); }}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -528,7 +579,7 @@ function App() {
       {view === 'login' || (!user && view !== 'register') ? (
         <LoginView onSuccess={() => { }} onSwitch={() => setView('register')} />
       ) : view === 'register' ? (
-        <RegisterView onSuccess={() => { }} onSwitch={() => setView('login')} />
+        <RegisterView onSuccess={() => { }} onSwitch={() => setView('login')} defaultRole={registerRole} />
       ) : (
         <div className="layout">
           <aside className="panel">
