@@ -192,6 +192,139 @@ function NotificationPanel({ userId, onClose }) {
   );
 }
 
+// MapPicker Component
+function MapPicker({ onSelect }) {
+  const mapRef = useRef(null);
+  const mapInstance = useRef(null);
+  const markerRef = useRef(null);
+
+  useEffect(() => {
+    if (mapRef.current && !mapInstance.current && window.L) {
+      mapInstance.current = window.L.map(mapRef.current).setView([20, 78], 4); // Default India view
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(mapInstance.current);
+
+      mapInstance.current.on('click', (e) => {
+        const { lat, lng } = e.latlng;
+        if (markerRef.current) markerRef.current.remove();
+        markerRef.current = window.L.marker([lat, lng]).addTo(mapInstance.current);
+        onSelect({ lat, lng });
+      });
+
+      // Try to get current location
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          mapInstance.current.setView([latitude, longitude], 13);
+        },
+        () => { },
+        { timeout: 5000 }
+      );
+    }
+
+    // Cleanup
+    return () => {
+      if (mapInstance.current) {
+        mapInstance.current.remove();
+        mapInstance.current = null;
+      }
+    };
+  }, [onSelect]);
+
+  return <div ref={mapRef} style={{ height: '300px', width: '100%', borderRadius: '12px', marginTop: '16px' }} />;
+}
+
+// Booking Modal Component
+function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
+  if (!isOpen) return null;
+  const [form, setForm] = useState({
+    customerName: user?.name || '',
+    customerEmail: '', // Explicitly empty as requested
+    customerContact: '',
+    serviceType: '',
+    userLat: null,
+    userLng: null
+  });
+  const [locationStatus, setLocationStatus] = useState('');
+
+  const handleSubmit = () => {
+    onSubmit(form);
+    onClose();
+  };
+
+  const detectLocation = () => {
+    setLocationStatus('Detecting...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm(prev => ({ ...prev, userLat: pos.coords.latitude, userLng: pos.coords.longitude }));
+        setLocationStatus('detected');
+      },
+      () => setLocationStatus('failed'),
+      { timeout: 5000 }
+    );
+  };
+
+  return (
+    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+      <div className="modal-content" style={{ background: '#fff', padding: '24px', borderRadius: '24px', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <h3 style={{ marginBottom: '20px' }}>Book Appointment</h3>
+
+        <div className="field-grid" style={{ gridTemplateColumns: '1fr', gap: '16px' }}>
+          <label className="field">
+            <span>Name</span>
+            <input value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} />
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <label className="field">
+              <span>Email</span>
+              <input type="email" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} required />
+            </label>
+            <label className="field">
+              <span>Phone (Optional)</span>
+              <input type="tel" value={form.customerContact} onChange={e => setForm({ ...form, customerContact: e.target.value })} />
+            </label>
+          </div>
+          <label className="field">
+            <span>Service Type</span>
+            <select value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)', background: '#fff' }}>
+              <option value="">Select Service...</option>
+              <option value="General Inquiry">General Inquiry</option>
+              <option value="Billing">Billing</option>
+              <option value="Technical Support">Technical Support</option>
+              <option value="New Connection">New Connection</option>
+            </select>
+          </label>
+
+          <div style={{ border: '1px solid var(--gray-200)', borderRadius: '12px', padding: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontWeight: '500', fontSize: '14px' }}>Location for ETA</span>
+              <button type="button" className="ghost" onClick={detectLocation} style={{ fontSize: '12px', padding: '4px 8px' }}>
+                📍 Detect Current
+              </button>
+            </div>
+            {locationStatus === 'detected' && <div style={{ fontSize: '12px', color: 'green', marginBottom: '8px' }}>✓ Location acquired</div>}
+            {locationStatus === 'failed' && <div style={{ fontSize: '12px', color: 'red', marginBottom: '8px' }}>⚠ Detection failed, please pick on map</div>}
+
+            <div style={{ fontSize: '12px', color: 'var(--gray-500)', marginBottom: '8px' }}>Or select on map:</div>
+            <MapPicker onSelect={({ lat, lng }) => {
+              setForm(f => ({ ...f, userLat: lat, userLng: lng }));
+              setLocationStatus('detected');
+            }} />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+          <button className="ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+          <button onClick={handleSubmit} disabled={!form.customerName || !form.serviceType || (!form.userLat && !form.userLng)} style={{ flex: 1 }}>
+            Confirm Booking
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const { user, logout, loading: authLoading } = useAuth();
   // Enforce login gate: if not logged in, default to 'login'
@@ -274,35 +407,29 @@ function App() {
       setAvailabilityInput(data.office.available_today);
     } catch (err) { setMessage(err.message); } finally { setLoading(false); }
   };
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
 
-  const handleBooking = async () => {
+  const handleBookingSubmit = async (formData) => {
     if (!selectedOfficeId) return setMessage('Choose an office');
-    if (!bookingForm.customerName) return setMessage('Name required');
+    if (!formData.customerName) return setMessage('Name required');
 
     try {
       setIsBusy(true);
-      let coords = {};
-      // Request location
-      try {
-        const pos = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
-        });
-        coords = { userLat: pos.coords.latitude, userLng: pos.coords.longitude };
-      } catch (e) {
-        console.warn('Geolocation failed', e);
-        // Continue without location
-      }
-
       await fetchJSON(`/api/offices/${selectedOfficeId}/book`, {
         method: 'POST',
         body: JSON.stringify({
-          ...bookingForm,
+          customerName: formData.customerName,
+          customerContact: formData.customerContact, // Phone
+          serviceType: formData.serviceType,
           userId: user?.id,
-          ...coords
+          userLat: formData.userLat,
+          userLng: formData.userLng,
+          note: formData.note // Optional
         }),
       });
       setMessage('Booking successful!');
-      setBookingForm({ customerName: user?.name || '', customerContact: user?.email || '', note: '' });
+      setIsBookingModalOpen(false); // Close modal on success
+      setBookingForm({ customerName: user?.name || '', customerContact: user?.email || '', note: '' }); // Reset form
       await Promise.all([loadOffices(), fetchOfficeDetail(selectedOfficeId)]);
     } catch (err) {
       setMessage(err.message);
@@ -461,47 +588,20 @@ function App() {
                 {view === 'customer' && (
                   <section className="panel-section">
                     <h4>Book Slot</h4>
-                    <div className="field-grid">
-                      <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-700)' }}>Name</span>
-                        <input
-                          value={bookingForm.customerName}
-                          onChange={e => setBookingForm({ ...bookingForm, customerName: e.target.value })}
-                          style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)' }}
-                        />
-                      </label>
-                      <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-700)' }}>Phone Number</span>
-                        <input
-                          type="tel"
-                          value={bookingForm.customerContact}
-                          onChange={e => setBookingForm({ ...bookingForm, customerContact: e.target.value })}
-                          style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)' }}
-                        />
-                      </label>
-                      <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-700)' }}>Service Type</span>
-                        <select
-                          value={bookingForm.serviceType}
-                          onChange={e => setBookingForm({ ...bookingForm, serviceType: e.target.value })}
-                          style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)', background: '#fff' }}
-                        >
-                          <option value="General Inquiry">General Inquiry</option>
-                          <option value="Technical Support">Technical Support</option>
-                          <option value="Billing">Billing</option>
-                          <option value="New Account">New Account</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div style={{ padding: '12px', background: 'var(--primary-50)', borderRadius: '12px', fontSize: '13px', color: 'var(--primary-700)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>📍</span>
-                      Location will be used to calculate your travel time.
-                    </div>
-                    <button onClick={handleBooking} disabled={isBusy}>
-                      {selectedOffice.available_today > 0 ? 'Book Now' : 'Join Queue'}
-                    </button>
+                    <p style={{ fontSize: '14px', color: 'var(--gray-500)' }}>
+                      {selectedOffice.available_today > 0 ? 'Slots available immediately.' : `Current wait: approx ${selectedOffice.queueCount * selectedOffice.avg_service_minutes} mins.`}
+                    </p>
+                    <button onClick={() => setIsBookingModalOpen(true)}>Book Now</button>
                   </section>
                 )}
+
+                <BookingModal
+                  isOpen={isBookingModalOpen}
+                  onClose={() => setIsBookingModalOpen(false)}
+                  onSubmit={handleBookingSubmit}
+                  office={selectedOffice}
+                  user={user}
+                />
 
                 {view === 'admin' && (
                   <section className="panel-section">
