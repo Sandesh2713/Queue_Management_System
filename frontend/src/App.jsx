@@ -214,8 +214,8 @@ function App() {
   const [notificationCount, setNotificationCount] = useState(0);
 
   // Form states
-  const [newOffice, setNewOffice] = useState({ name: '', serviceType: '', dailyCapacity: 20, operatingHours: '09:00-17:00', avgServiceMinutes: 10, latitude: '', longitude: '' });
-  const [bookingForm, setBookingForm] = useState({ customerName: '', customerContact: '', note: '' });
+  const [newOffice, setNewOffice] = useState({ name: '', serviceType: '', dailyCapacity: 100, operatingHours: '09:00-17:00', avgServiceMinutes: 10, latitude: '', longitude: '' });
+  const [bookingForm, setBookingForm] = useState({ customerName: user?.name || '', customerContact: user?.email || '', serviceType: 'General Inquiry', note: '' });
   const [availabilityInput, setAvailabilityInput] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
@@ -462,8 +462,40 @@ function App() {
                   <section className="panel-section">
                     <h4>Book Slot</h4>
                     <div className="field-grid">
-                      <label>Name<input value={bookingForm.customerName} onChange={e => setBookingForm({ ...bookingForm, customerName: e.target.value })} /></label>
-                      <label>Contact<input value={bookingForm.customerContact} onChange={e => setBookingForm({ ...bookingForm, customerContact: e.target.value })} /></label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-700)' }}>Name</span>
+                        <input
+                          value={bookingForm.customerName}
+                          onChange={e => setBookingForm({ ...bookingForm, customerName: e.target.value })}
+                          style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)' }}
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-700)' }}>Phone Number</span>
+                        <input
+                          type="tel"
+                          value={bookingForm.customerContact}
+                          onChange={e => setBookingForm({ ...bookingForm, customerContact: e.target.value })}
+                          style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)' }}
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-700)' }}>Service Type</span>
+                        <select
+                          value={bookingForm.serviceType}
+                          onChange={e => setBookingForm({ ...bookingForm, serviceType: e.target.value })}
+                          style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)', background: '#fff' }}
+                        >
+                          <option value="General Inquiry">General Inquiry</option>
+                          <option value="Technical Support">Technical Support</option>
+                          <option value="Billing">Billing</option>
+                          <option value="New Account">New Account</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div style={{ padding: '12px', background: 'var(--primary-50)', borderRadius: '12px', fontSize: '13px', color: 'var(--primary-700)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>📍</span>
+                      Location will be used to calculate your travel time.
                     </div>
                     <button onClick={handleBooking} disabled={isBusy}>
                       {selectedOffice.available_today > 0 ? 'Book Now' : 'Join Queue'}

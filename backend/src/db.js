@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS tokens (
   lat REAL,
   lng REAL,
   travel_time_minutes INTEGER,
+  service_type TEXT,
   FOREIGN KEY (office_id) REFERENCES offices(id),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -82,6 +83,7 @@ try { db.exec(`ALTER TABLE tokens ADD COLUMN lat REAL`); } catch (e) { }
 try { db.exec(`ALTER TABLE tokens ADD COLUMN lng REAL`); } catch (e) { }
 try { db.exec(`ALTER TABLE tokens ADD COLUMN travel_time_minutes INTEGER`); } catch (e) { }
 try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'customer'`); } catch (e) { }
+try { db.exec(`ALTER TABLE tokens ADD COLUMN service_type TEXT`); } catch (e) { }
 
 module.exports = db;
 

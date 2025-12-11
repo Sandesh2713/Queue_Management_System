@@ -45,8 +45,8 @@ const officesStmt = {
 
 const tokensStmt = {
   insert: db.prepare(`
-    INSERT INTO tokens (id, office_id, user_name, user_contact, status, position, token_number, eta_minutes, note, created_at, user_id, lat, lng, travel_time_minutes)
-    VALUES (@id, @office_id, @user_name, @user_contact, @status, @position, @token_number, @eta_minutes, @note, @created_at, @user_id, @lat, @lng, @travel_time_minutes)
+    INSERT INTO tokens (id, office_id, user_name, user_contact, status, position, token_number, eta_minutes, note, created_at, user_id, lat, lng, travel_time_minutes, service_type)
+    VALUES (@id, @office_id, @user_name, @user_contact, @status, @position, @token_number, @eta_minutes, @note, @created_at, @user_id, @lat, @lng, @travel_time_minutes, @service_type)
   `),
   getForOffice: db.prepare(`
     SELECT * FROM tokens
@@ -322,7 +322,7 @@ app.patch('/api/offices/:id/settings', requireAdmin, (req, res) => {
 
 app.post('/api/offices/:id/book', (req, res) => {
   const office = ensureOffice(req.params.id);
-  const { customerName, customerContact, note, userId, userLat, userLng } = req.body;
+  const { customerName, customerContact, serviceType, note, userId, userLat, userLng } = req.body;
   if (!customerName) {
     return res.status(400).json({ error: 'customerName is required' });
   }
@@ -344,6 +344,7 @@ app.post('/api/offices/:id/book', (req, res) => {
     lat: userLat || null,
     lng: userLng || null,
     travel_time_minutes: travelTimeMinutes,
+    service_type: serviceType || 'General',
   };
 
   if (office.available_today > 0) {
