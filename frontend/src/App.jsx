@@ -24,7 +24,9 @@ function Stat({ label, value }) {
   );
 }
 
-function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin }) {
+function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser }) {
+  const isOwner = currentUser?.id === token.user_id;
+
   return (
     <div className="token-row">
       <div>
@@ -43,11 +45,14 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin }) {
             <button className="ghost" onClick={() => onNoShow(token.id)}>No-show</button>
           </>
         )}
-        <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
+        {(isAdmin || isOwner) && (
+          <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
+        )}
       </div>
     </div>
   );
 }
+
 
 function LoginView({ onSuccess, onSwitch }) {
   const { login } = useAuth();
@@ -464,7 +469,7 @@ function App() {
                   <h4>Queue Status</h4>
                   <div className="token-list">
                     {(selectedOfficeData?.tokens || []).map(t => (
-                      <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} isAdmin={view === 'admin'} />
+                      <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} isAdmin={view === 'admin'} currentUser={user} />
                     ))}
                   </div>
                 </section>
