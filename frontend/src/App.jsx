@@ -26,6 +26,7 @@ function Stat({ label, value }) {
 
 function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser }) {
   const isOwner = currentUser?.id === token.user_id;
+  const isTerminal = ['cancelled', 'completed', 'no-show'].includes(token.status);
 
   return (
     <div className="token-row">
@@ -34,19 +35,23 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser 
         <div className="token-meta">
           {token.user_name} · {token.status}
           {token.position ? ` · pos ${token.position}` : ''}
-          {token.travel_time_minutes ? ` · ${token.travel_time_minutes} min away` : ''}
+          {(token.travel_time_minutes && token.status !== 'booked') ? ` · ${token.travel_time_minutes} min away` : ''}
         </div>
       </div>
       <div className="token-actions">
         <span className="token-chip">{token.status}</span>
-        {isAdmin && (
+        {!isTerminal && (
           <>
-            <button className="ghost" onClick={() => onComplete(token.id)}>Complete</button>
-            <button className="ghost" onClick={() => onNoShow(token.id)}>No-show</button>
+            {isAdmin && (
+              <>
+                <button className="ghost" onClick={() => onComplete(token.id)}>Complete</button>
+                <button className="ghost" onClick={() => onNoShow(token.id)}>No-show</button>
+              </>
+            )}
+            {(isAdmin || isOwner) && (
+              <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
+            )}
           </>
-        )}
-        {(isAdmin || isOwner) && (
-          <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
         )}
       </div>
     </div>

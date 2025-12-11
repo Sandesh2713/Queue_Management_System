@@ -329,7 +329,7 @@ app.post('/api/offices/:id/book', (req, res) => {
 
   const tokenNumber = tokensStmt.getTokenNumberMax.get(office.id).maxNum + 1;
   const travelTimeMinutes = haversineDistance(Number(userLat), Number(userLng), office.latitude, office.longitude)
-    ? Math.ceil(haversineDistance(Number(userLat), Number(userLng), office.latitude, office.longitude) * 2) // 2 min per km (approx 30km/h)
+    ? Math.ceil(haversineDistance(Number(userLat), Number(userLng), office.latitude, office.longitude)) // 1 min per km (approx 60km/h)
     : null;
 
   const baseToken = {
@@ -365,11 +365,13 @@ app.post('/api/offices/:id/book', (req, res) => {
 
   const position = tokensStmt.getQueuedMaxPosition.get(office.id).maxPos + 1;
   const queueWait = Math.max(position, 1) * (office.avg_service_minutes || 10);
+  const totalEta = queueWait + (travelTimeMinutes || 0);
+
   const token = {
     ...baseToken,
     status: 'queued',
     position,
-    eta_minutes: queueWait,
+    eta_minutes: totalEta,
   };
   const txn = db.transaction(() => {
     tokensStmt.insert.run(token);
