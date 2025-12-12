@@ -59,7 +59,7 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser 
 }
 
 
-function LoginView({ onSuccess, onSwitch }) {
+function LoginView({ onSuccess, onSwitch, onBack }) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,6 +77,7 @@ function LoginView({ onSuccess, onSwitch }) {
 
   return (
     <div className="auth-container">
+      <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button>
       <h2>Login</h2>
       {error && <div className="message">{error}</div>}
       <form onSubmit={handleSubmit}>
@@ -95,7 +96,7 @@ function LoginView({ onSuccess, onSwitch }) {
   );
 }
 
-function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer' }) {
+function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack }) {
   const { register } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -116,6 +117,7 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer' }) {
 
   return (
     <div className="auth-container">
+      <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button>
       <h2>Register</h2>
       {error && <div className="message">{error}</div>}
       <form onSubmit={handleSubmit}>
@@ -364,8 +366,36 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
 
 function App() {
   const { user, logout, loading: authLoading } = useAuth();
-  // Enforce login gate: if not logged in, default to 'landing'
-  const [view, setView] = useState(user ? (user.role === 'admin' ? 'admin' : 'customer') : 'landing');
+
+  // Initialize view from history state or default
+  const [view, setViewState] = useState(user ? (user.role === 'admin' ? 'admin' : 'customer') : 'landing');
+
+  // Wrapper to sync history
+  const setView = (newView, addToHistory = true) => {
+    setViewState(newView);
+    if (addToHistory) {
+      window.history.pushState({ view: newView }, '', window.location.pathname);
+    }
+  };
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.view) {
+        setViewState(event.state.view);
+      } else {
+        // Default fallback if no state (e.g. initial load)
+        setViewState(user ? (user.role === 'admin' ? 'admin' : 'customer') : 'landing');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+
+    // Set initial state
+    window.history.replaceState({ view: view }, '', window.location.pathname);
+
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [user]); // Re-bind if user changes substantially, though mainly stable
+
   const [registerRole, setRegisterRole] = useState('customer');
   const [offices, setOffices] = useState([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
@@ -577,9 +607,9 @@ function App() {
       {message && <div className="message">{message}</div>}
 
       {view === 'login' || (!user && view !== 'register') ? (
-        <LoginView onSuccess={() => { }} onSwitch={() => setView('register')} />
+        <LoginView onSuccess={() => { }} onSwitch={() => setView('register')} onBack={() => setView('landing')} />
       ) : view === 'register' ? (
-        <RegisterView onSuccess={() => { }} onSwitch={() => setView('login')} defaultRole={registerRole} />
+        <RegisterView onSuccess={() => { }} onSwitch={() => setView('login')} defaultRole={registerRole} onBack={() => setView('landing')} />
       ) : (
         <div className="layout">
           <aside className="panel">
