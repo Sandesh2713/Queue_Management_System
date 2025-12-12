@@ -24,8 +24,8 @@ const toIso = () => new Date().toISOString();
 
 const officesStmt = {
   insert: db.prepare(`
-    INSERT INTO offices (id, name, service_type, daily_capacity, available_today, operating_hours, latitude, longitude, avg_service_minutes, created_at)
-    VALUES (@id, @name, @service_type, @daily_capacity, @available_today, @operating_hours, @latitude, @longitude, @avg_service_minutes, @created_at)
+    INSERT INTO offices (id, name, service_type, daily_capacity, available_today, operating_hours, latitude, longitude, avg_service_minutes, owner_id, created_at)
+    VALUES (@id, @name, @service_type, @daily_capacity, @available_today, @operating_hours, @latitude, @longitude, @avg_service_minutes, @owner_id, @created_at)
   `),
   updateAvailability: db.prepare(`UPDATE offices SET available_today = @available_today WHERE id = @id`),
   updateSettings: db.prepare(`
@@ -253,6 +253,7 @@ app.post('/api/offices', requireAdmin, (req, res) => {
     latitude: latitude ?? null,
     longitude: longitude ?? null,
     avg_service_minutes: Number(avgServiceMinutes) || 10,
+    owner_id: req.user.id,
     created_at: toIso(),
   };
 
@@ -338,6 +339,32 @@ app.post('/api/notifications/:id/read', (req, res) => {
 });
 
 app.get('/api/offices', (req, res) => {
+  let stmt = officesStmt.getAll;
+  let params = [];
+
+  // Basic filter for owner if requested (requires token usually, but we'll do lightweight check or assume public for now unless specific param)
+  if (req.query.owner === 'me') {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, jwtSecret);
+        // Dynamic query for owner
+        const specificStmt = db.prepare(`SELECT * FROM offices WHERE owner_id = ? ORDER BY created_at DESC`);
+        const offices = specificStmt.all(decoded.id).map((office) => {
+          const queueCount = db
+            .prepare(`SELECT COUNT(*) as total FROM tokens WHERE office_id = ? AND status IN ('queued')`)
+            .get(office.id).total;
+          const inProgressCount = db
+            .prepare(`SELECT COUNT(*) as total FROM tokens WHERE office_id = ? AND status IN ('booked','called')`)
+            .get(office.id).total;
+          return { ...office, queueCount, inProgressCount };
+        });
+        return res.json({ offices });
+      } catch (e) { /* ignore invalid token, return all */ }
+    }
+  }
+
   const offices = officesStmt.getAll.all().map((office) => {
     const queueCount = db
       .prepare(`SELECT COUNT(*) as total FROM tokens WHERE office_id = ? AND status IN ('queued')`)
@@ -477,6 +504,9 @@ app.post('/api/offices/:id/call-next', requireAdmin, (req, res) => {
       status: 'called',
       called_at: toIso(),
       position: null,
+      completed_at: undefined,
+      note: undefined,
+      eta_minutes: undefined,
     });
     recordEvent(t.id, 'called', { via: t.status });
 
@@ -583,25 +613,78 @@ app.post('/api/tokens/:id/no-show', requireAdmin, (req, res) => {
     return res.status(404).json({ error: 'Token not found' });
   }
   const office = ensureOffice(token.office_id);
-  let availability = office.available_today;
-  if (['booked', 'called'].includes(token.status)) {
-    availability += 1;
-  }
+
+  // Strategy: "Defer". Swap current (Called) with Next (Booked/Queued).
+  // If no Next, just move Current to Queue Head and free desk.
+
+  const nextBooked = tokensStmt.getNextBooked.get(office.id);
+  const nextQueued = tokensStmt.getNextQueued.get(office.id);
+  let candidate = nextBooked || nextQueued;
+
   const txn = db.transaction(() => {
-    officesStmt.updateAvailability.run({ id: office.id, available_today: availability });
+    let newStatusToken = { ...token, status: 'queued', called_at: null, completed_at: null, note: token.note || null };
+    let newAvailability = office.available_today;
+
+    if (candidate) {
+      // If candidate was in queue, we can swap positions nicely to minimize disruption
+      if (candidate.status === 'queued') {
+        // Swap: Token takes Candidate's position. Candidate leaves queue.
+        newStatusToken.position = candidate.position;
+      } else {
+        // Candidate was Booked (no position).
+        // Shift all queued items + 1
+        db.prepare("UPDATE tokens SET position = position + 1 WHERE office_id = ? AND status = 'queued'").run(office.id);
+        newStatusToken.position = 1;
+      }
+
+      // Update Candidate to Called
+      tokensStmt.updateStatus.run({
+        id: candidate.id,
+        status: 'called',
+        called_at: toIso(),
+        position: null,
+        completed_at: undefined,
+        note: candidate.note || undefined,
+        eta_minutes: undefined
+      });
+
+      if (candidate.user_id) {
+        createNotification(candidate.user_id, `You have been called at ${office.name}. please proceed to the desk.`);
+      }
+    } else {
+      // No one waiting.
+      // Just move Token to Queue.
+      // Shift just in case
+      db.prepare("UPDATE tokens SET position = position + 1 WHERE office_id = ? AND status = 'queued'").run(office.id);
+      newStatusToken.position = 1;
+
+      // Desk becomes free
+      if (['booked', 'called'].includes(token.status)) {
+        newAvailability += 1;
+        officesStmt.updateAvailability.run({ id: office.id, available_today: newAvailability });
+      }
+    }
+
+    // Update Token to Queued
     tokensStmt.updateStatus.run({
       id: token.id,
-      status: 'no-show',
-      completed_at: toIso(),
+      status: 'queued',
       called_at: null,
-      note: null,
-      eta_minutes: null,
-      position: null
+      position: newStatusToken.position,
+      completed_at: undefined,
+      note: newStatusToken.note || undefined,
+      eta_minutes: undefined
     });
-    recordEvent(token.id, 'no-show');
+
+    recordEvent(token.id, 'deferred', { swappedWith: candidate?.id });
+    if (candidate) recordEvent(candidate.id, 'called', { via: 'defer_swap' });
   });
+
   txn();
-  res.json({ id: token.id, status: 'no-show', available_today: availability });
+
+  // Refetch to return clean state
+  const updatedToken = tokensStmt.getById.get(token.id);
+  res.json({ token: updatedToken, message: candidate ? `Deferred. Called ${candidate.user_name}` : 'Deferred to queue.' });
 });
 
 app.get('/api/tokens/:id', (req, res) => {

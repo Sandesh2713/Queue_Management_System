@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS offices (
   latitude REAL,
   longitude REAL,
   avg_service_minutes INTEGER DEFAULT 10,
+  owner_id TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -102,6 +103,7 @@ try { db.exec(`ALTER TABLE tokens ADD COLUMN lng REAL`); } catch (e) { }
 try { db.exec(`ALTER TABLE tokens ADD COLUMN travel_time_minutes INTEGER`); } catch (e) { }
 try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'customer'`); } catch (e) { }
 try { db.exec(`ALTER TABLE tokens ADD COLUMN service_type TEXT`); } catch (e) { }
+try { db.exec(`ALTER TABLE offices ADD COLUMN owner_id TEXT`); } catch (e) { }
 
 module.exports = db;
 

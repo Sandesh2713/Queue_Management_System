@@ -2,6 +2,55 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import './App.css';
 import { useAuth } from './AuthContext';
 
+function CreateOfficeWizard({ onSubmit, onBack }) {
+  const [form, setForm] = useState({ name: '', serviceType: '', dailyCapacity: 100, operatingHours: '09:00-17:00', avgServiceMinutes: 10, latitude: '', longitude: '' });
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    await onSubmit(form);
+    setLoading(false);
+  };
+
+  return (
+    <div className="auth-container" style={{ maxWidth: '600px' }}>
+      <h2>Setup your Office</h2>
+      <p style={{ marginBottom: '20px', color: 'var(--gray-500)' }}>Tell us about your organization to get started.</p>
+      <form onSubmit={handleSubmit}>
+        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <label className="field">
+            <span>Office Name</span>
+            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+          </label>
+          <label className="field">
+            <span>Service Type</span>
+            <input value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} required placeholder="e.g. Clinic, Bank" />
+          </label>
+        </div>
+        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <label className="field">
+            <span>Daily Capacity</span>
+            <input type="number" value={form.dailyCapacity} onChange={e => setForm({ ...form, dailyCapacity: e.target.value })} required />
+          </label>
+          <label className="field">
+            <span>Avg Service Time (mins)</span>
+            <input type="number" value={form.avgServiceMinutes} onChange={e => setForm({ ...form, avgServiceMinutes: e.target.value })} required />
+          </label>
+        </div>
+        <label className="field">
+          <span>Operating Hours</span>
+          <input value={form.operatingHours} onChange={e => setForm({ ...form, operatingHours: e.target.value })} placeholder="09:00-17:00" />
+        </label>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+          {/* <button type="button" className="ghost" onClick={onBack}>Back</button>  -- usually no back from here if flow is forced */}
+          <button type="submit" disabled={loading}>{loading ? 'Creating...' : 'Create Office'}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
 async function fetchJSON(path, options = {}) {
@@ -443,6 +492,11 @@ function App() {
       setBookingForm((prev) => ({ ...prev, customerName: user.name, customerContact: user.email }));
       // If we were on login/register pages, switch to assigned role view
       if (view === 'login' || view === 'register' || view === 'landing') {
+        // If admin just registered and has no office (handled via manual call catch), but here we just redirect standard.
+        // We actually want to intercept "just registered" state.
+        // For now, simplify: if admin logs in and has NO offices, maybe redirect to wizard? 
+        // But for explicit registration flow, we handle in onSuccess.
+        // So just default redirect here mostly works unless we want to force wizard for office-less admins.
         setView(user.role === 'admin' ? 'admin' : 'customer', false);
       }
     } else {
@@ -474,9 +528,19 @@ function App() {
   const loadOffices = async () => {
     try {
       setLoading(true);
-      const data = await fetchJSON('/api/offices');
+      const endpoint = (user?.role === 'admin') ? '/api/offices?owner=me' : '/api/offices';
+      const data = await fetchJSON(endpoint);
       setOffices(data.offices);
-      if (!selectedOfficeId && data.offices.length) setSelectedOfficeId(data.offices[0].id);
+      // Auto-select first office for Admin to show dashboard immediately
+      if (user?.role === 'admin' && data.offices.length > 0) {
+        setSelectedOfficeId(data.offices[0].id);
+      } else if (!selectedOfficeId && data.offices.length > 0 && user?.role !== 'admin') {
+        // for customers, maybe don't auto select or keep existing logic
+        setSelectedOfficeId(data.offices[0].id);
+      }
+
+      // If admin has no offices and is in admin view, maybe we should prompt wizard?
+      // Controlled via manual flow for now.
     } catch (err) { setMessage(err.message); } finally { setLoading(false); }
   };
 
@@ -519,17 +583,16 @@ function App() {
     }
   };
 
-  const handleCreateOffice = async () => {
-    if (!adminKey) return setMessage('Admin key required');
+  const handleCreateOffice = async (officeData) => {
     try {
       setIsBusy(true);
       await fetchJSON('/api/offices', {
         method: 'POST',
-        headers: { 'x-admin-key': adminKey },
-        body: JSON.stringify(newOffice),
+        body: JSON.stringify(officeData),
       });
       setMessage('Office created');
       await loadOffices();
+      setView('admin'); // Go to dashboard
     } catch (err) { setMessage(err.message); } finally { setIsBusy(false); }
   };
 
@@ -620,8 +683,18 @@ function App() {
 
       {view === 'login' || (!user && view !== 'register') ? (
         <LoginView onSuccess={() => { }} onSwitch={() => setView('register')} onBack={() => setView('landing')} />
+      ) : view === 'create-office' ? (
+        <CreateOfficeWizard onSubmit={handleCreateOffice} onBack={() => setView('admin')} />
       ) : view === 'register' ? (
-        <RegisterView onSuccess={() => { }} onSwitch={() => setView('login')} defaultRole={registerRole} onBack={() => setView('landing')} />
+        <RegisterView
+          onSuccess={() => {
+            if (registerRole === 'admin') setView('create-office');
+            else setView('customer');
+          }}
+          onSwitch={() => setView('login')}
+          defaultRole={registerRole}
+          onBack={() => setView('landing')}
+        />
       ) : (
         <div className="layout">
           <aside className="panel">
@@ -636,7 +709,8 @@ function App() {
             </div>
             {loading && <div className="muted">Loading...</div>}
             <div className="office-list">
-              {offices.map((office) => (
+              {/* Only show office list for Customers, or if Admin has multiple (optional, but requested to hide 'left section' details) */}
+              {user?.role !== 'admin' && offices.map((office) => (
                 <button
                   key={office.id}
                   className={`office-card ${selectedOfficeId === office.id ? 'selected' : ''}`}
@@ -650,23 +724,29 @@ function App() {
                   </div>
                 </button>
               ))}
+              {user?.role === 'admin' && offices.length === 0 && (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--gray-500)' }}>
+                  You haven't created an office yet.
+                  <button className="small primary" onClick={() => setView('create-office')} style={{ marginTop: '10px' }}>Create Office</button>
+                </div>
+              )}
+              {user?.role === 'admin' && offices.map((office) => (
+                // Admin sees only their own offices, simplified view or just auto-selected. 
+                // Request says "don't show it", implies singular focus.
+                // We will show a simple list if they have multiple, but likely just one.
+                <div key={office.id} className={`office-card selected`} style={{ cursor: 'default' }}>
+                  <div className="office-name">{office.name} (Your Office)</div>
+                  <div className="office-meta">
+                    <span>Queue: {office.queueCount}</span>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {view === 'admin' && (
               <>
-                <div className="panel-section">
-                  <h4>Create Office</h4>
-                  <div className="field-grid">
-                    <label>Name<input value={newOffice.name} onChange={e => setNewOffice({ ...newOffice, name: e.target.value })} /></label>
-                    <label>Service<input value={newOffice.serviceType} onChange={e => setNewOffice({ ...newOffice, serviceType: e.target.value })} /></label>
-                    <label>Capacity<input type="number" value={newOffice.dailyCapacity} onChange={e => setNewOffice({ ...newOffice, dailyCapacity: Number(e.target.value) })} /></label>
-                    <label>Lat<input value={newOffice.latitude} onChange={e => setNewOffice({ ...newOffice, latitude: e.target.value })} /></label>
-                    <label>Lng<input value={newOffice.longitude} onChange={e => setNewOffice({ ...newOffice, longitude: e.target.value })} /></label>
-                    <label>Key<input value={adminKey} onChange={e => setAdminKey(e.target.value)} /></label>
-                  </div>
-                  <button onClick={handleCreateOffice} disabled={isBusy}>Create</button>
-                </div>
-
+                {/* REMOVED Create Office Form from Sidebar */}
+                {/* Only History remains */}
                 <div className="panel-section">
                   <h4>History</h4>
                   <button onClick={loadHistory} className="ghost">View Token History</button>
