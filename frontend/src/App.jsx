@@ -24,8 +24,8 @@ function CreateOfficeWizard({ onSubmit, onBack }) {
             <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
           </label>
           <label className="field">
-            <span>Service Type</span>
-            <input value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} required placeholder="e.g. Clinic, Bank" />
+            <span>Service Types (comma separated)</span>
+            <input value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} required placeholder="e.g. Sales, Repair, Returns" />
           </label>
         </div>
         <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -394,10 +394,12 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
             <span>Service Type</span>
             <select value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)', background: '#fff' }}>
               <option value="">Select Service...</option>
-              <option value="General Inquiry">General Inquiry</option>
-              <option value="Billing">Billing</option>
-              <option value="Technical Support">Technical Support</option>
-              <option value="New Connection">New Connection</option>
+              {office?.service_type
+                ? office.service_type.split(',').map(s => s.trim()).filter(Boolean).map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))
+                : <option value="General Inquiry">General Inquiry</option>
+              }
             </select>
           </label>
 
@@ -429,6 +431,100 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
     </div>
   );
 }
+const ProfileMenu = ({ user, onNavigate, onLogout }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="profile-menu" ref={menuRef} style={{ position: 'relative' }}>
+      <button className="ghost" onClick={() => setIsOpen(!isOpen)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px', border: 'none', background: 'transparent' }}>
+        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--gray-100)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </div>
+      </button>
+      {isOpen && (
+        <div className="dropdown" style={{ position: 'absolute', top: '120%', right: 0, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: '12px', padding: '8px', zIndex: 100, minWidth: '180px', display: 'flex', flexDirection: 'column', gap: '4px', border: '1px solid var(--gray-200)' }}>
+          <button className="ghost" onClick={() => { setIsOpen(false); onNavigate('profile'); }} style={{ justifyContent: 'flex-start', textAlign: 'left' }}>Use Profile</button>
+          <button className="ghost" onClick={() => { setIsOpen(false); onNavigate('settings'); }} style={{ justifyContent: 'flex-start', textAlign: 'left' }}>Settings</button>
+          <div style={{ height: '1px', background: 'var(--gray-200)', margin: '4px 0' }} />
+          <button className="ghost" onClick={onLogout} style={{ justifyContent: 'flex-start', textAlign: 'left', color: 'var(--state-error)' }}>Logout</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ProfileView = ({ user, onBack }) => {
+  return (
+    <div className="panel" style={{ maxWidth: '600px', margin: '40px auto' }}>
+      <div className="panel-header">
+        <h3>Profile Details</h3>
+        <button className="ghost" onClick={onBack}>Back</button>
+      </div>
+      <div className="field-grid" style={{ gridTemplateColumns: '1fr', gap: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', paddingBottom: '20px', borderBottom: '1px solid var(--gray-200)' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' }}>
+            {user.name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>{user.name}</div>
+            <div className="token-chip" style={{ display: 'inline-block' }}>{user.role}</div>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gap: '16px' }}>
+          <div className="info-row">
+            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Email Address</label>
+            <div style={{ fontSize: '16px' }}>{user.email}</div>
+          </div>
+          <div className="info-row">
+            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Phone Number</label>
+            <div style={{ fontSize: '16px' }}>{user.phone || 'Not provided'}</div>
+          </div>
+          <div className="info-row">
+            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Member Since</label>
+            <div style={{ fontSize: '16px' }}>{new Date(user.created_at).toLocaleDateString()}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SettingsView = ({ onBack }) => {
+  return (
+    <div className="panel" style={{ maxWidth: '600px', margin: '40px auto' }}>
+      <div className="panel-header">
+        <h3>Settings</h3>
+        <button className="ghost" onClick={onBack}>Back</button>
+      </div>
+      <div className="panel-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontWeight: '500', fontSize: '16px' }}>Dark Mode</div>
+            <div className="muted" style={{ fontSize: '14px' }}>Adjust interface theme</div>
+          </div>
+          {/* Placeholder Toggle */}
+          <div style={{ width: '40px', height: '24px', background: 'var(--gray-300)', borderRadius: '12px', position: 'relative', cursor: 'pointer' }}>
+            <div style={{ width: '20px', height: '20px', background: '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: '2px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 function App() {
   const { user, logout, loading: authLoading } = useAuth();
@@ -676,12 +772,11 @@ function App() {
             <button onClick={() => setView('login')}>Login / Register</button>
           ) : (
             <>
-              <span>Hi, {user.name}</span>
               <div className="bell-icon" onClick={() => setShowNotifications(!showNotifications)}>
                 🔔
                 {notificationCount > 0 && <span className="bell-count">{notificationCount}</span>}
               </div>
-              <button className="ghost" onClick={logout}>Logout</button>
+              <ProfileMenu user={user} onNavigate={setView} onLogout={logout} />
             </>
           )}
         </div>
@@ -707,6 +802,10 @@ function App() {
           defaultRole={registerRole}
           onBack={() => setView('landing')}
         />
+      ) : view === 'profile' ? (
+        <ProfileView user={user} onBack={() => setView(user.role === 'admin' ? 'admin' : 'customer')} />
+      ) : view === 'settings' ? (
+        <SettingsView onBack={() => setView(user.role === 'admin' ? 'admin' : 'customer')} />
       ) : (
         <div className="layout">
           <aside className="panel">
