@@ -112,12 +112,14 @@ function LoginView({ onSuccess, onSwitch, onBack }) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminKey, setAdminKey] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await login(email, password);
+      await login(email, password, isAdmin ? adminKey : undefined);
       onSuccess();
     } catch (err) {
       setError(err.message);
@@ -138,6 +140,21 @@ function LoginView({ onSuccess, onSwitch, onBack }) {
           <span>Password</span>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </label>
+
+        <div style={{ margin: '12px 0' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} />
+            I am a Company Admin
+          </label>
+        </div>
+
+        {isAdmin && (
+          <label className="field">
+            <span>Admin Key</span>
+            <input type="password" value={adminKey} onChange={(e) => setAdminKey(e.target.value)} required placeholder="Required for company login" />
+          </label>
+        )}
+
         <button type="submit">Login</button>
       </form>
       <button className="auth-toggle" onClick={onSwitch}>Need an account? Register</button>
@@ -492,22 +509,17 @@ function App() {
       setBookingForm((prev) => ({ ...prev, customerName: user.name, customerContact: user.email }));
       // If we were on login/register pages, switch to assigned role view
       if (view === 'login' || view === 'register' || view === 'landing') {
-        // If admin just registered and has no office (handled via manual call catch), but here we just redirect standard.
-        // We actually want to intercept "just registered" state.
-        // For now, simplify: if admin logs in and has NO offices, maybe redirect to wizard? 
-        // But for explicit registration flow, we handle in onSuccess.
-        // So just default redirect here mostly works unless we want to force wizard for office-less admins.
         setView(user.role === 'admin' ? 'admin' : 'customer', false);
       }
     } else {
       // If logged out, force landing view (unless already on login/register)
       if (view !== 'login' && view !== 'register') setView('landing');
     }
+    // Reload offices whenever user state changes to ensure correct role-based fetching (Isolation Fix)
+    loadOffices();
   }, [user]);
 
-  useEffect(() => {
-    loadOffices();
-  }, []);
+  // useEffect(() => { loadOffices(); }, []); // Removed: Handled by user effect to ensure auth context
 
   useEffect(() => {
     if (selectedOfficeId) fetchOfficeDetail(selectedOfficeId);

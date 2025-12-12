@@ -33,11 +33,14 @@ export function AuthProvider({ children }) {
         }
     }, [token]);
 
-    const login = async (email, password) => {
+    const login = async (email, password, adminKey) => {
+        const body = { email, password };
+        if (adminKey) body.adminKey = adminKey;
+
         const res = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);

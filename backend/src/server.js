@@ -290,7 +290,7 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, adminKey: providedKey } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' });
   }
@@ -298,7 +298,15 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  const token = jwt.sign({ id: user.id }, jwtSecret, { expiresIn: '30d' });
+
+  // Enforce Admin Key for Admin Login
+  if (user.role === 'admin') {
+    if (providedKey !== adminKey) {
+      return res.status(403).json({ error: 'Invalid Admin Key' });
+    }
+  }
+
+  const token = jwt.sign({ id: user.id, role: user.role }, jwtSecret, { expiresIn: '24h' });
   res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
