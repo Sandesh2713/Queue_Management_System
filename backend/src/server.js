@@ -239,6 +239,15 @@ app.get('/health', (req, res) => {
 
 app.post('/api/offices', requireAdmin, (req, res) => {
   const { name, serviceType, dailyCapacity, operatingHours, latitude, longitude, avgServiceMinutes = 10 } = req.body;
+
+  // Check if admin already has an office
+  const countStmt = db.prepare('SELECT COUNT(*) as count FROM offices WHERE owner_id = ?');
+  const existing = countStmt.get(req.user.id);
+
+  if (existing.count > 0) {
+    return res.status(400).json({ error: 'Limit reached: You can only create one office.' });
+  }
+
   if (!name || !serviceType || dailyCapacity === undefined) {
     return res.status(400).json({ error: 'name, serviceType, and dailyCapacity are required' });
   }
