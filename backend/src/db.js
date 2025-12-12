@@ -75,6 +75,24 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS token_history (
+  id TEXT PRIMARY KEY,
+  office_id TEXT NOT NULL,
+  user_id TEXT,
+  user_name TEXT NOT NULL,
+  user_contact TEXT,
+  status TEXT NOT NULL,
+  token_number INTEGER,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  called_at TEXT,
+  completed_at TEXT,
+  service_type TEXT,
+  archived_at TEXT NOT NULL,
+  FOREIGN KEY (office_id) REFERENCES offices(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
 `);
 
 // Migrations for existing tables

@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const db = require('./db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const cron = require('node-cron');
 
 dotenv.config();
 
@@ -114,6 +115,61 @@ const eventsStmt = {
     SELECT * FROM queue_events WHERE token_id = ? ORDER BY created_at ASC
   `),
 };
+
+const historyStmt = {
+  insert: db.prepare(`
+    INSERT INTO token_history (id, office_id, user_id, user_name, user_contact, status, token_number, note, created_at, called_at, completed_at, service_type, archived_at)
+    VALUES (@id, @office_id, @user_id, @user_name, @user_contact, @status, @token_number, @note, @created_at, @called_at, @completed_at, @service_type, @archived_at)
+  `),
+  getAll: db.prepare(`SELECT * FROM token_history ORDER BY archived_at DESC, created_at DESC LIMIT 500`),
+};
+
+// Cron Job: Run at 12:00 AM every day
+cron.schedule('0 0 * * *', () => {
+  console.log('Running daily token cleanup...');
+  try {
+    const txn = db.transaction(() => {
+      // 1. Get all tokens to archive (all active tokens from previous day or just all tokens?)
+      // The requirement says "history of token should be deleted... from queue slot and store it".
+      // We will move ALL tokens to history to clear the board for the new day.
+      const allTokens = db.prepare('SELECT * FROM tokens').all();
+
+      if (allTokens.length > 0) {
+        const now = toIso();
+        for (const t of allTokens) {
+          historyStmt.insert.run({
+            id: t.id,
+            office_id: t.office_id,
+            user_id: t.user_id,
+            user_name: t.user_name,
+            user_contact: t.user_contact,
+            status: t.status,
+            token_number: t.token_number,
+            note: t.note,
+            created_at: t.created_at,
+            called_at: t.called_at,
+            completed_at: t.completed_at,
+            service_type: t.service_type,
+            archived_at: now
+          });
+        }
+
+        // 2. Clear tokens table
+        db.prepare('DELETE FROM tokens').run();
+
+        // 3. Reset office availability and queue counts?
+        // If tokens are gone, queue is empty.
+        // Availability should reset to daily_capacity? Or stay as is?
+        // Usually, a new day means full capacity resets.
+        db.prepare('UPDATE offices SET available_today = daily_capacity').run();
+      }
+    });
+    txn();
+    console.log('Daily token cleanup completed.');
+  } catch (err) {
+    console.error('Daily token cleanup failed:', err);
+  }
+});
 
 const ensureOffice = (id) => {
   const office = officesStmt.getById.get(id);
@@ -256,6 +312,15 @@ app.get('/api/auth/me', (req, res) => {
     res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
+app.get('/api/history', requireAdmin, (req, res) => {
+  try {
+    const history = historyStmt.getAll.all();
+    res.json({ history });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch history' });
   }
 });
 

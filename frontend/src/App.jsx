@@ -442,8 +442,8 @@ function App() {
     if (user) {
       setBookingForm((prev) => ({ ...prev, customerName: user.name, customerContact: user.email }));
       // If we were on login/register pages, switch to assigned role view
-      if (view === 'login' || view === 'register') {
-        setView(user.role === 'admin' ? 'admin' : 'customer');
+      if (view === 'login' || view === 'register' || view === 'landing') {
+        setView(user.role === 'admin' ? 'admin' : 'customer', false);
       }
     } else {
       // If logged out, force landing view (unless already on login/register)
@@ -458,6 +458,18 @@ function App() {
   useEffect(() => {
     if (selectedOfficeId) fetchOfficeDetail(selectedOfficeId);
   }, [selectedOfficeId]);
+
+  const [historyTokens, setHistoryTokens] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const loadHistory = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchJSON('/api/history');
+      setHistoryTokens(data.history);
+      setShowHistory(true);
+    } catch (err) { setMessage(err.message); } finally { setLoading(false); }
+  };
 
   const loadOffices = async () => {
     try {
@@ -641,23 +653,53 @@ function App() {
             </div>
 
             {view === 'admin' && (
-              <div className="panel-section">
-                <h4>Create Office</h4>
-                <div className="field-grid">
-                  <label>Name<input value={newOffice.name} onChange={e => setNewOffice({ ...newOffice, name: e.target.value })} /></label>
-                  <label>Service<input value={newOffice.serviceType} onChange={e => setNewOffice({ ...newOffice, serviceType: e.target.value })} /></label>
-                  <label>Capacity<input type="number" value={newOffice.dailyCapacity} onChange={e => setNewOffice({ ...newOffice, dailyCapacity: Number(e.target.value) })} /></label>
-                  <label>Lat<input value={newOffice.latitude} onChange={e => setNewOffice({ ...newOffice, latitude: e.target.value })} /></label>
-                  <label>Lng<input value={newOffice.longitude} onChange={e => setNewOffice({ ...newOffice, longitude: e.target.value })} /></label>
-                  <label>Key<input value={adminKey} onChange={e => setAdminKey(e.target.value)} /></label>
+              <>
+                <div className="panel-section">
+                  <h4>Create Office</h4>
+                  <div className="field-grid">
+                    <label>Name<input value={newOffice.name} onChange={e => setNewOffice({ ...newOffice, name: e.target.value })} /></label>
+                    <label>Service<input value={newOffice.serviceType} onChange={e => setNewOffice({ ...newOffice, serviceType: e.target.value })} /></label>
+                    <label>Capacity<input type="number" value={newOffice.dailyCapacity} onChange={e => setNewOffice({ ...newOffice, dailyCapacity: Number(e.target.value) })} /></label>
+                    <label>Lat<input value={newOffice.latitude} onChange={e => setNewOffice({ ...newOffice, latitude: e.target.value })} /></label>
+                    <label>Lng<input value={newOffice.longitude} onChange={e => setNewOffice({ ...newOffice, longitude: e.target.value })} /></label>
+                    <label>Key<input value={adminKey} onChange={e => setAdminKey(e.target.value)} /></label>
+                  </div>
+                  <button onClick={handleCreateOffice} disabled={isBusy}>Create</button>
                 </div>
-                <button onClick={handleCreateOffice} disabled={isBusy}>Create</button>
-              </div>
+
+                <div className="panel-section">
+                  <h4>History</h4>
+                  <button onClick={loadHistory} className="ghost">View Token History</button>
+                </div>
+              </>
             )}
           </aside>
 
           <main className="panel">
-            {!selectedOffice ? <div className="muted">Select office</div> : (
+            {showHistory && view === 'admin' ? (
+              <div className="history-view">
+                <div className="panel-header">
+                  <h3>Token History</h3>
+                  <button className="ghost" onClick={() => setShowHistory(false)}>Close</button>
+                </div>
+                <div className="token-list">
+                  {historyTokens.length === 0 && <div className="muted" style={{ padding: 20 }}>No archived tokens found.</div>}
+                  {historyTokens.map(t => (
+                    <div key={t.id} className="token-row" style={{ opacity: 0.8 }}>
+                      <div>
+                        <div className="token-label">#{t.token_number} - {t.user_name}</div>
+                        <div className="token-meta">
+                          {new Date(t.created_at).toLocaleDateString()} · {t.service_type} · {t.status}
+                        </div>
+                      </div>
+                      <div className="token-actions">
+                        <span className="token-chip">{new Date(t.archived_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : !selectedOffice ? <div className="muted">Select office</div> : (
               <>
                 <div className="panel-header">
                   <h3>{selectedOffice.name}</h3>
@@ -765,3 +807,4 @@ function App() {
 }
 
 export default App;
+
