@@ -503,19 +503,18 @@ function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
 
       <div className="landing-content">
         <div className="landing-card">
-
           <h2>For <i>Companies</i></h2>
           <p>Your people, your business, your growth - beautifully managed.</p>
-          <button onClick={() => onLogin('admin')}>Login</button>
+          <button className="black-btn" onClick={() => onLogin('admin')}>Login</button>
           <div className="signup-prompt">
             Don't have an account? <span onClick={onRegisterAdmin} className="link">Sign up.</span>
           </div>
         </div>
 
         <div className="landing-card">
-          <h3>For <i>Customers</i></h3>
+          <h2>For <i>Customers</i></h2>
           <p>Join us and experience smoother services, every step of the way.</p>
-          <button onClick={() => onLogin('customer')}>Login</button>
+          <button className="black-btn" onClick={() => onLogin('customer')}>Login</button>
           <div className="signup-prompt">
             Don't have an account? <span onClick={onRegisterCustomer} className="link">Sign up.</span>
           </div>
