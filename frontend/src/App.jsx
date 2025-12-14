@@ -213,49 +213,91 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState(defaultRole);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       await register(name, email, password, phone, role);
       onSuccess();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
-      <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button>
-      <h2>Register</h2>
+    <div className="auth-container login-redesign">
+      {/* <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button> */}
+
+      <h2 style={{ fontSize: '28px', marginBottom: '-12px', lineHeight: '1' }}>Create Account</h2>
+      <div style={{ textAlign: 'center', color: 'var(--gray-500)', marginBottom: '32px' }}>Join us today</div>
+
       {error && <div className="message">{error}</div>}
-      <form onSubmit={handleSubmit}>
-        <label className="field">
-          <span>Name</span>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Email</span>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Password</span>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Phone (optional)</span>
-          <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Account Type</span>
-          <select value={role} onChange={(e) => setRole(e.target.value)} style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)' }}>
-            <option value="customer">Customer</option>
-            <option value="admin">Admin (Office Manager)</option>
+
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="field">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            placeholder="Full Name"
+            className="rounded-input"
+          />
+        </div>
+        <div className="field">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Email Address"
+            className="rounded-input"
+          />
+        </div>
+        <div className="field">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            placeholder="Password"
+            className="rounded-input"
+          />
+        </div>
+        <div className="field">
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone (Optional)"
+            className="rounded-input"
+          />
+        </div>
+
+        <div className="field">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="rounded-input"
+            style={{ width: '100%', appearance: 'none', background: '#f8fafc url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007CB2%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E") no-repeat right 16px center', backgroundSize: '12px' }}
+          >
+            <option value="customer">I am a Customer</option>
+            <option value="admin">I am an Office Manager</option>
           </select>
-        </label>
-        <button type="submit">Register</button>
+        </div>
+
+        <button type="submit" className="login-btn" disabled={loading}>
+          {loading ? 'Creating Account...' : 'Sign Up'}
+        </button>
       </form>
-      <button className="auth-toggle" onClick={onSwitch}>Have an account? Login</button>
+
+      <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '14px', color: 'var(--gray-500)' }}>
+        Have an account? <span onClick={onSwitch} style={{ color: '#22c55e', fontWeight: '700', cursor: 'pointer' }}>Login</span>
+      </div>
     </div>
   );
 }
@@ -787,6 +829,7 @@ function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [user]); // Re-bind if user changes substantially, though mainly stable
 
+  const [registerRole, setRegisterRole] = useState('customer');
   const [loginRole, setLoginRole] = useState(''); // 'admin' | 'customer' | ''
   const [tempEmail, setTempEmail] = useState(''); // For password reset flow
   const [offices, setOffices] = useState([]);
@@ -1031,7 +1074,16 @@ function App() {
 
       {message && <div className="message">{message}</div>}
 
-      {view === 'login' || (!user && view !== 'register' && view !== 'forgot-password' && view !== 'reset-password') ? (
+      {view === 'landing' && !user ? (
+        <LandingView
+          onLogin={(role) => {
+            setLoginRole(role);
+            setView('login');
+          }}
+          onRegisterAdmin={() => { setRegisterRole('admin'); setView('register'); }}
+          onRegisterCustomer={() => { setRegisterRole('customer'); setView('register'); }}
+        />
+      ) : view === 'login' || (!user && view !== 'register' && view !== 'forgot-password' && view !== 'reset-password') ? (
         <LoginView
           role={loginRole}
           onSuccess={() => { }}
