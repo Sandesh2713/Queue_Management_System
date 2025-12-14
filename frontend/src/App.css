@@ -557,21 +557,12 @@ button.ghost.danger:hover {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(90deg, #ffffff 0%, #e0f2fe 50%, #ffffff 100%);
-  background-size: 200% 100%;
-  animation: gradientMove 8s ease-in-out infinite alternate;
+  /* background moved to body */
   font-family: 'Inter', sans-serif;
 }
 
-@keyframes gradientMove {
-  0% {
-    background-position: 0% 50%;
-  }
 
-  100% {
-    background-position: 100% 50%;
-  }
-}
+/* Keyframes moved to index.css */
 
 .landing-header {
   display: flex;
@@ -718,4 +709,54 @@ button.ghost.danger:hover {
 .back-btn:hover {
   color: var(--gray-900);
   background: var(--gray-100);
+}
+
+
+/* Login Redesign Specifics */
+.login-redesign {
+  padding: 40px 48px;
+  max-width: 400px;
+  /* Reduced from 480px */
+  border-radius: 24px;
+  /* Slightly reduced radius */
+  box-shadow: 0 15px 60px rgba(0, 0, 0, 0.08);
+  border: none;
+  margin: auto;
+  /* Centers vertically and horizontally in flex container */
+  width: 100%;
+  /* Ensure it takes width up to max-width */
+}
+
+.rounded-input {
+  border-radius: 50px !important;
+  /* Pill shape or high radius */
+  padding: 14px 24px !important;
+  border: 1px solid var(--gray-200) !important;
+  background: #f8fafc !important;
+  /* Slight gray bg for inputs often looks good */
+  font-size: 15px;
+}
+
+.rounded-input:focus {
+  background: #fff !important;
+  border-color: #22c55e !important;
+  /* Green focus */
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1) !important;
+}
+
+.login-btn {
+  background: #22c55e !important;
+  /* Green */
+  border-radius: 50px !important;
+  padding: 14px !important;
+  font-size: 16px !important;
+  margin-top: 8px;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+}
+
+.login-btn:hover {
+  background: #16a34a !important;
+  /* Darker green hover */
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4) !important;
 }

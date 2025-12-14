@@ -91,6 +91,17 @@ export function AuthProvider({ children }) {
         return data;
     };
 
+    const resetPassword = async (email, otp, newPassword) => {
+        const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp, newPassword }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        return data;
+    };
+
     const logout = () => {
         sessionStorage.removeItem('token');
         setToken(null);
@@ -98,7 +109,7 @@ export function AuthProvider({ children }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, login, register, logout, loading, sendOtp, verifyOtp }}>
+        <AuthContext.Provider value={{ user, token, login, register, logout, loading, sendOtp, verifyOtp, resetPassword }}>
             {children}
         </AuthContext.Provider>
     );

@@ -327,6 +327,41 @@ app.post('/api/auth/verify-otp', (req, res) => {
   res.json({ success: true, message: 'Email verified successfully' });
 });
 
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) return res.status(400).json({ error: 'Email, OTP, and new password required' });
+
+  try {
+    const record = emailVerificationsStmt.get.get(email);
+    if (!record) return res.status(400).json({ error: 'No OTP found for this email' });
+
+    if (new Date() > new Date(record.expires_at)) {
+      return res.status(400).json({ error: 'OTP expired' });
+    }
+
+    if (record.otp !== otp) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password
+    const user = usersStmt.getByEmail.get(email);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, user.id);
+
+    // Cleanup
+    emailVerificationsStmt.delete.run(email);
+
+    res.json({ success: true, message: 'Password reset successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 app.post('/api/offices', requireAdmin, (req, res) => {
   const { name, serviceType, dailyCapacity, operatingHours, latitude, longitude, avgServiceMinutes = 10 } = req.body;
 

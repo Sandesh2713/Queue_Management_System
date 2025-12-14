@@ -46,20 +46,38 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: var(--font-sans);
-  background-color: var(--bg-app);
-  background-image: radial-gradient(circle at 10% 20%, rgb(238, 242, 255) 0%, rgb(248, 250, 252) 90%); 
+  background: linear-gradient(90deg, #ffffff 0%, #e0f2fe 50%, #ffffff 100%);
+  background-size: 200% 100%;
+  animation: gradientMove 8s ease-in-out infinite alternate;
   color: var(--text-main);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, h4, h5, h6 {
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   margin: 0;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--gray-900);
 }
 
-button, input, textarea {
+button,
+input,
+textarea {
   font-family: inherit;
 }

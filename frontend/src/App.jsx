@@ -108,11 +108,14 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser 
 }
 
 
-function LoginView({ onSuccess, onSwitch, onBack }) {
+function LoginView({ onSuccess, onSwitch, onBack, role }) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
+
+  // If role is passed, enforce it.
+  const roleProp = role; // 'admin' or 'customer' or undefined
+  const [isAdmin, setIsAdmin] = useState(role === 'admin');
   const [adminKey, setAdminKey] = useState('');
   const [error, setError] = useState('');
 
@@ -127,37 +130,77 @@ function LoginView({ onSuccess, onSwitch, onBack }) {
   };
 
   return (
-    <div className="auth-container">
-      <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button>
-      <h2>Login</h2>
-      {error && <div className="message">{error}</div>}
-      <form onSubmit={handleSubmit}>
-        <label className="field">
-          <span>Email</span>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Password</span>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </label>
+    <div className="auth-container login-redesign">
+      {/* Kept back button but it might need to vary based on design preference. Keeping for UX. */}
+      {/* <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button> */}
 
-        <div style={{ margin: '12px 0' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
-            <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} />
-            I am a Company Admin
-          </label>
+      <h2 style={{ fontSize: '28px', marginBottom: '-12px', lineHeight: '1' }}>Welcome Back</h2>
+      <div style={{ textAlign: 'center', color: 'var(--gray-500)', marginBottom: '32px' }}>Let's get started</div>
+
+      {error && <div className="message">{error}</div>}
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="field">
+          {/* Design often hides labels or puts them inside. Keeping labels for accessibility but could hide them if placeholders are preferred. */}
+          {/* Adding placeholders to match typical clean login forms */}
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Email"
+            className="rounded-input"
+          />
+        </div>
+        <div className="field">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            placeholder="Password"
+            className="rounded-input"
+          />
         </div>
 
-        {isAdmin && (
-          <label className="field">
-            <span>Admin Key</span>
-            <input type="password" value={adminKey} onChange={(e) => setAdminKey(e.target.value)} required placeholder="Required for company login" />
-          </label>
+        {/* Forgot Password Link */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <span
+            style={{ color: '#22c55e', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
+            onClick={() => onSwitch('forgot-password')}
+          >
+            Forgot Password?
+          </span>
+        </div>
+
+        {/* Admin Toggle - Hidden if role is explicitly customer */}
+        {!roleProp && (
+          <div style={{ margin: '4px 0', fontSize: '13px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--gray-500)' }}>
+              <input type="checkbox" checked={isAdmin} onChange={e => setIsAdmin(e.target.checked)} />
+              Login as Admin
+            </label>
+          </div>
         )}
 
-        <button type="submit">Login</button>
+        {isAdmin && (
+          <div className="field">
+            <input
+              type="password"
+              value={adminKey}
+              onChange={(e) => setAdminKey(e.target.value)}
+              required
+              placeholder="Admin Key"
+              className="rounded-input"
+            />
+          </div>
+        )}
+
+        <button type="submit" className="login-btn">Login</button>
       </form>
-      <button className="auth-toggle" onClick={onSwitch}>Need an account? Register</button>
+
+      <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '14px', color: 'var(--gray-500)' }}>
+        Don't have an account? <span onClick={onSwitch} style={{ color: '#22c55e', fontWeight: '700', cursor: 'pointer' }}>Sign up.</span>
+      </div>
     </div>
   );
 }
@@ -291,6 +334,118 @@ function VerifyEmailView({ email, onSuccess, onBack }) {
   );
 }
 
+// Forgot Password Component
+function ForgotPasswordView({ onBack, onVerify }) {
+  const { sendOtp } = useAuth();
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setMessage('');
+    try {
+      await sendOtp(email);
+      onVerify(email); // Switch to verification view
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-container login-redesign">
+      <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button>
+      <h2 style={{ fontSize: '28px', marginBottom: '8px' }}>Reset Password</h2>
+      <div style={{ textAlign: 'center', color: 'var(--gray-500)', marginBottom: '32px' }}>Enter email to receive code</div>
+
+      {error && <div className="message" style={{ background: '#ffebee', color: '#c62828' }}>{error}</div>}
+      {message && <div className="message" style={{ background: '#e8f5e9', color: '#2e7d32' }}>{message}</div>}
+
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="field">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Email Address"
+            className="rounded-input"
+          />
+        </div>
+        <button type="submit" className="login-btn" disabled={loading}>
+          {loading ? 'Sending...' : 'Send Code'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// Reset Password Component
+function ResetPasswordView({ email, onBack, onSuccess }) {
+  const { resetPassword } = useAuth();
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await resetPassword(email, otp, newPassword);
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-container login-redesign">
+      <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button>
+      <h2 style={{ fontSize: '28px', marginBottom: '8px' }}>New Password</h2>
+      <div style={{ textAlign: 'center', color: 'var(--gray-500)', marginBottom: '32px' }}>Enter code and new password</div>
+
+      {error && <div className="message" style={{ background: '#ffebee', color: '#c62828' }}>{error}</div>}
+
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="field">
+          <input
+            type="text"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+            placeholder="6-digit Code"
+            maxLength={6}
+            className="rounded-input"
+            required
+            style={{ textAlign: 'center', letterSpacing: '2px' }}
+          />
+        </div>
+        <div className="field">
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+            placeholder="New Password"
+            className="rounded-input"
+          />
+        </div>
+        <button type="submit" className="login-btn" disabled={loading}>
+          {loading ? 'Updating...' : 'Set Password'}
+        </button>
+      </form>
+    </div>
+  );
+}
+// Landing View Component
 function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
   return (
     <div className="landing-container">
@@ -299,7 +454,7 @@ function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
           <span style={{ fontWeight: 800 }}>Get Easy</span> 🌱
         </div>
         <div className="landing-nav">
-          <button className="ghost small" onClick={onLogin}>Log in</button>
+          <button className="ghost small" onClick={() => onLogin()}>Log in</button>
           <button className="primary small" onClick={onRegisterCustomer}>Create a free account</button>
         </div>
       </header>
@@ -309,7 +464,7 @@ function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
 
           <h2>For <i>Companies</i></h2>
           <p>Your people, your business, your growth - beautifully managed.</p>
-          <button onClick={onLogin}>Login</button>
+          <button onClick={() => onLogin('admin')}>Login</button>
           <div className="signup-prompt">
             Don't have an account? <span onClick={onRegisterAdmin} className="link">Sign up.</span>
           </div>
@@ -318,7 +473,7 @@ function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
         <div className="landing-card">
           <h3>For <i>Customers</i></h3>
           <p>Join us and experience smoother services, every step of the way.</p>
-          <button onClick={onLogin}>Login</button>
+          <button onClick={() => onLogin('customer')}>Login</button>
           <div className="signup-prompt">
             Don't have an account? <span onClick={onRegisterCustomer} className="link">Sign up.</span>
           </div>
@@ -632,7 +787,8 @@ function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [user]); // Re-bind if user changes substantially, though mainly stable
 
-  const [registerRole, setRegisterRole] = useState('customer');
+  const [loginRole, setLoginRole] = useState(''); // 'admin' | 'customer' | ''
+  const [tempEmail, setTempEmail] = useState(''); // For password reset flow
   const [offices, setOffices] = useState([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
   const [selectedOfficeData, setSelectedOfficeData] = useState(null);
@@ -832,7 +988,10 @@ function App() {
       <>
         {message && <div className="message">{message}</div>}
         <LandingView
-          onLogin={() => setView('login')}
+          onLogin={(role) => {
+            setLoginRole(role);
+            setView('login');
+          }}
           onRegisterAdmin={() => { setRegisterRole('admin'); setView('register'); }}
           onRegisterCustomer={() => { setRegisterRole('customer'); setView('register'); }}
         />
@@ -840,27 +999,31 @@ function App() {
     );
   }
 
+  const showHeader = !['login', 'register', 'verify-email', 'forgot-password', 'reset-password'].includes(view);
+
   return (
     <div className="app">
-      <header className="app-header">
-        <div>
-          <div className="eyebrow">Queue Management System</div>
-          <h1>Serve people faster</h1>
-        </div>
-        <div className="user-menu">
-          {!user ? (
-            <button onClick={() => setView('login')}>Login / Register</button>
-          ) : (
-            <>
-              <div className="bell-icon" onClick={() => setShowNotifications(!showNotifications)}>
-                🔔
-                {notificationCount > 0 && <span className="bell-count">{notificationCount}</span>}
-              </div>
-              <ProfileMenu user={user} onNavigate={setView} onLogout={logout} />
-            </>
-          )}
-        </div>
-      </header>
+      {showHeader && (
+        <header className="app-header">
+          <div>
+            <div className="eyebrow">Queue Management System</div>
+            <h1>Serve people faster</h1>
+          </div>
+          <div className="user-menu">
+            {!user ? (
+              <button onClick={() => setView('login')}>Login / Register</button>
+            ) : (
+              <>
+                <div className="bell-icon" onClick={() => setShowNotifications(!showNotifications)}>
+                  🔔
+                  {notificationCount > 0 && <span className="bell-count">{notificationCount}</span>}
+                </div>
+                <ProfileMenu user={user} onNavigate={setView} onLogout={logout} />
+              </>
+            )}
+          </div>
+        </header>
+      )}
 
       {showNotifications && user && (
         <NotificationPanel userId={user.id} onClose={() => setShowNotifications(false)} />
@@ -868,8 +1031,33 @@ function App() {
 
       {message && <div className="message">{message}</div>}
 
-      {view === 'login' || (!user && view !== 'register') ? (
-        <LoginView onSuccess={() => { }} onSwitch={() => setView('register')} onBack={() => setView('landing')} />
+      {view === 'login' || (!user && view !== 'register' && view !== 'forgot-password' && view !== 'reset-password') ? (
+        <LoginView
+          role={loginRole}
+          onSuccess={() => { }}
+          onSwitch={(target) => {
+            if (target === 'forgot-password') setView('forgot-password');
+            else setView('register');
+          }}
+          onBack={() => setView('landing')}
+        />
+      ) : view === 'forgot-password' ? (
+        <ForgotPasswordView
+          onBack={() => setView('login')}
+          onVerify={(email) => {
+            setTempEmail(email);
+            setView('reset-password');
+          }}
+        />
+      ) : view === 'reset-password' ? (
+        <ResetPasswordView
+          email={tempEmail}
+          onBack={() => setView('forgot-password')}
+          onSuccess={() => {
+            setMessage('Password updated! Please login.');
+            setView('login');
+          }}
+        />
       ) : view === 'create-office' ? (
         <CreateOfficeWizard onSubmit={handleCreateOffice} onBack={() => setView('admin')} />
       ) : view === 'register' ? (
