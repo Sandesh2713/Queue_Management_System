@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   phone TEXT,
   role TEXT DEFAULT 'customer',
+  is_verified INTEGER DEFAULT 0,
   created_at TEXT NOT NULL
 );
 
@@ -94,6 +95,12 @@ CREATE TABLE IF NOT EXISTS token_history (
   FOREIGN KEY (office_id) REFERENCES offices(id),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS email_verifications (
+  email TEXT PRIMARY KEY,
+  otp TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
 `);
 
 // Migrations for existing tables
@@ -104,6 +111,7 @@ try { db.exec(`ALTER TABLE tokens ADD COLUMN travel_time_minutes INTEGER`); } ca
 try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'customer'`); } catch (e) { }
 try { db.exec(`ALTER TABLE tokens ADD COLUMN service_type TEXT`); } catch (e) { }
 try { db.exec(`ALTER TABLE offices ADD COLUMN owner_id TEXT`); } catch (e) { }
+try { db.exec(`ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`); } catch (e) { }
 
 module.exports = db;
 

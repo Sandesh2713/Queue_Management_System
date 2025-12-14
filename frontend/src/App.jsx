@@ -217,6 +217,80 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
   );
 }
 
+function VerifyEmailView({ email, onSuccess, onBack }) {
+  const { verifyOtp, sendOtp } = useAuth();
+  const [otp, setOtp] = useState('');
+  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
+  const [loading, setLoading] = useState(false);
+  const mounted = useRef(false);
+
+  // Auto-send OTP on mount
+  useEffect(() => {
+    if (!mounted.current && email) {
+      mounted.current = true;
+      // Trigger OTP send on fresh load of this view
+      sendOtp(email).catch(err => setError('Failed to send OTP: ' + err.message));
+    }
+  }, [email, sendOtp]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await verifyOtp(email, otp);
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setMsg('');
+    setError('');
+    try {
+      await sendOtp(email);
+      setMsg('OTP resent successfully!');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <button type="button" className="back-btn" onClick={(e) => { e.preventDefault(); onBack(); }}>← Back</button>
+      <h2>Verify Email</h2>
+      <p style={{ marginBottom: '20px', color: 'var(--gray-500)' }}>
+        We sent a code to <strong>{email}</strong>.
+      </p>
+      {error && <div className="message" style={{ background: '#ffebee', color: '#c62828' }}>{error}</div>}
+      {msg && <div className="message" style={{ background: '#e8f5e9', color: '#2e7d32' }}>{msg}</div>}
+
+      <form onSubmit={handleSubmit}>
+        <label className="field">
+          <span>Enter 6-digit Code</span>
+          <input
+            type="text"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+            placeholder="123456"
+            maxLength={6}
+            style={{ letterSpacing: '4px', fontSize: '24px', textAlign: 'center' }}
+            required
+          />
+        </label>
+        <button type="submit" disabled={loading}>{loading ? 'Verifying...' : 'Verify'}</button>
+      </form>
+
+      <div style={{ marginTop: '20px', textAlign: 'center' }}>
+        <button className="ghost small" onClick={handleResend}>Resend Code</button>
+      </div>
+    </div>
+  );
+}
+
 function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
   return (
     <div className="landing-container">
@@ -605,7 +679,13 @@ function App() {
       setBookingForm((prev) => ({ ...prev, customerName: user.name, customerContact: user.email }));
       // If we were on login/register pages, switch to assigned role view
       if (view === 'login' || view === 'register' || view === 'landing') {
-        setView(user.role === 'admin' ? 'admin' : 'customer', false);
+        if (user.is_verified === 0) {
+          setView('verify-email', false);
+        } else {
+          setView(user.role === 'admin' ? 'admin' : 'customer', false);
+        }
+      } else if (view !== 'verify-email' && user.is_verified === 0) {
+        setView('verify-email', false);
       }
     } else {
       // If logged out, force landing view (unless already on login/register)
@@ -795,12 +875,24 @@ function App() {
       ) : view === 'register' ? (
         <RegisterView
           onSuccess={() => {
-            if (registerRole === 'admin') setView('create-office');
-            else setView('customer');
+            setView('verify-email');
           }}
           onSwitch={() => setView('login')}
           defaultRole={registerRole}
           onBack={() => setView('landing')}
+        />
+      ) : view === 'verify-email' && user ? (
+        <VerifyEmailView
+          email={user.email}
+          onSuccess={() => {
+            // Refresh or manually set
+            setMessage('Verified! Welcome.');
+            setView(user.role === 'admin' ? 'admin' : 'customer');
+          }}
+          onBack={() => {
+            logout();
+            setView('landing');
+          }}
         />
       ) : view === 'profile' ? (
         <ProfileView user={user} onBack={() => setView(user.role === 'admin' ? 'admin' : 'customer')} />

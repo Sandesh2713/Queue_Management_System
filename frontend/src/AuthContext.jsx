@@ -64,6 +64,33 @@ export function AuthProvider({ children }) {
         return data.user;
     };
 
+    const sendOtp = async (email) => {
+        const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        return data;
+    };
+
+    const verifyOtp = async (email, otp) => {
+        const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        // If verified, update local user state
+        if (user && user.email === email) {
+            setUser({ ...user, is_verified: 1 });
+        }
+        return data;
+    };
+
     const logout = () => {
         sessionStorage.removeItem('token');
         setToken(null);
@@ -71,7 +98,7 @@ export function AuthProvider({ children }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+        <AuthContext.Provider value={{ user, token, login, register, logout, loading, sendOtp, verifyOtp }}>
             {children}
         </AuthContext.Provider>
     );

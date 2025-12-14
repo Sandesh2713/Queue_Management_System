@@ -7,6 +7,7 @@ const db = require('./db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cron = require('node-cron');
+const nodemailer = require('nodemailer');
 
 dotenv.config();
 
@@ -15,6 +16,36 @@ const port = process.env.PORT || 4000;
 const adminKey = process.env.ADMIN_KEY || 'changeme-admin-key';
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const jwtSecret = process.env.JWT_SECRET || 'super-secret-jwt-key';
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
+
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true for 465, false for other ports
+  auth: {
+    user: smtpUser,
+    pass: smtpPass,
+  },
+});
+
+const sendEmail = async (to, subject, text) => {
+  if (!smtpUser || !smtpPass) {
+    console.log('Mock Email:', { to, subject, text });
+    return;
+  }
+  try {
+    await transporter.sendMail({
+      from: `"Queue System" <${smtpUser}>`,
+      to,
+      subject,
+      text,
+    });
+    console.log('Email sent to', to);
+  } catch (err) {
+    console.error('Error sending email:', err);
+  }
+};
 
 app.use(cors({ origin: clientOrigin.split(',').map((s) => s.trim()), credentials: false }));
 app.use(express.json());
@@ -95,6 +126,19 @@ const usersStmt = {
   `),
   getByEmail: db.prepare(`SELECT * FROM users WHERE email = ?`),
   getById: db.prepare(`SELECT * FROM users WHERE id = ?`),
+  updateVerified: db.prepare(`UPDATE users SET is_verified = 1 WHERE id = ?`),
+};
+
+const emailVerificationsStmt = {
+  upsert: db.prepare(`
+    INSERT INTO email_verifications (email, otp, expires_at)
+    VALUES (@email, @otp, @expires_at)
+    ON CONFLICT(email) DO UPDATE SET
+      otp = @otp,
+      expires_at = @expires_at
+  `),
+  get: db.prepare(`SELECT * FROM email_verifications WHERE email = ?`),
+  delete: db.prepare(`DELETE FROM email_verifications WHERE email = ?`),
 };
 
 const notificationsStmt = {
@@ -237,6 +281,52 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: toIso() });
 });
 
+/* Email Verification Routes */
+app.post('/api/auth/send-otp', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  // Generate 6 digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
+
+  try {
+    emailVerificationsStmt.upsert.run({ email, otp, expires_at: expiresAt });
+    await sendEmail(email, 'Your Verification Code', `Your OTP is: ${otp}`);
+    res.json({ message: 'OTP sent' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send OTP' });
+  }
+});
+
+app.post('/api/auth/verify-otp', (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) return res.status(400).json({ error: 'Email and OTP required' });
+
+  const record = emailVerificationsStmt.get.get(email);
+  if (!record) return res.status(400).json({ error: 'No OTP found for this email' });
+
+  if (new Date() > new Date(record.expires_at)) {
+    return res.status(400).json({ error: 'OTP expired' });
+  }
+
+  if (record.otp !== otp) {
+    return res.status(400).json({ error: 'Invalid OTP' });
+  }
+
+  // Verify user if exists
+  const user = usersStmt.getByEmail.get(email);
+  if (user) {
+    usersStmt.updateVerified.run(user.id);
+  }
+
+  // Cleanup
+  emailVerificationsStmt.delete.run(email);
+
+  res.json({ success: true, message: 'Email verified successfully' });
+});
+
 app.post('/api/offices', requireAdmin, (req, res) => {
   const { name, serviceType, dailyCapacity, operatingHours, latitude, longitude, avgServiceMinutes = 10 } = req.body;
 
@@ -291,11 +381,12 @@ app.post('/api/auth/register', (req, res) => {
     password_hash: hashedPassword,
     phone: phone || '',
     role: role || 'customer',
+    is_verified: 0,
     created_at: toIso(),
   };
   usersStmt.insert.run(user);
   const token = jwt.sign({ id: user.id }, jwtSecret, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, is_verified: 0 } });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -316,7 +407,7 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const token = jwt.sign({ id: user.id, role: user.role }, jwtSecret, { expiresIn: '24h' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, is_verified: user.is_verified } });
 });
 
 app.get('/api/auth/me', (req, res) => {
@@ -327,7 +418,7 @@ app.get('/api/auth/me', (req, res) => {
     const decoded = jwt.verify(token, jwtSecret);
     const user = usersStmt.getById.get(decoded.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, is_verified: user.is_verified } });
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });
   }
