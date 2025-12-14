@@ -302,7 +302,7 @@ Please use the following One-Time Password (OTP) to proceed with the password ch
 
 OTP: ${otp}
 
-🔴 This OTP is valid for 5 minutes and must be used only once.
+This OTP is valid for 5 minutes and must be used only once.
 
 For security reasons, please do not share this code with anyone.
 
@@ -320,7 +320,7 @@ Please use the following One-Time Password (OTP) to verify your request:
 
 OTP: ${otp}
 
-🔴 This OTP is valid for 5 minutes and should not be shared with anyone.
+This OTP is valid for 5 minutes and should not be shared with anyone.
 
 If this request was not initiated by you, please disregard this email.
 
