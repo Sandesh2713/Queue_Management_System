@@ -488,38 +488,34 @@ function ResetPasswordView({ email, onBack, onSuccess }) {
   );
 }
 // Landing View Component
-// Landing View Component
 function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
   return (
     <div className="landing-container">
       <header className="landing-header">
-        <div className="nav-links">
-          <a href="#" onClick={(e) => e.preventDefault()}>About Us</a>
-          <a href="#" onClick={(e) => e.preventDefault()}>Contact</a>
-          <a href="#" onClick={(e) => e.preventDefault()}>FAQs</a>
+        <div className="brand">
+          <span style={{ fontWeight: 800 }}>Get Easy</span> 🌱
         </div>
-        <div className="brand-center">
-          <span style={{ fontWeight: 800 }}>Get Ezi</span> 🌱
-        </div>
-        <div className="auth-action">
-          <button className="login-outline-btn" onClick={() => onLogin()}>Log in</button>
+        <div className="landing-nav">
+          <button className="ghost small" onClick={() => onLogin()}>Log in</button>
+          <button className="primary small" onClick={onRegisterCustomer}>Create a free account</button>
         </div>
       </header>
 
       <div className="landing-content">
         <div className="landing-card">
+
           <h2>For <i>Companies</i></h2>
           <p>Your people, your business, your growth - beautifully managed.</p>
-          <button className="black-btn" onClick={() => onLogin('admin')}>Login</button>
+          <button onClick={() => onLogin('admin')}>Login</button>
           <div className="signup-prompt">
             Don't have an account? <span onClick={onRegisterAdmin} className="link">Sign up.</span>
           </div>
         </div>
 
         <div className="landing-card">
-          <h2>For <i>Customers</i></h2>
+          <h3>For <i>Customers</i></h3>
           <p>Join us and experience smoother services, every step of the way.</p>
-          <button className="black-btn" onClick={() => onLogin('customer')}>Login</button>
+          <button onClick={() => onLogin('customer')}>Login</button>
           <div className="signup-prompt">
             Don't have an account? <span onClick={onRegisterCustomer} className="link">Sign up.</span>
           </div>
