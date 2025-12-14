@@ -492,30 +492,40 @@ function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
   return (
     <div className="landing-container">
       <header className="landing-header">
-        <div className="brand">
-          <span style={{ fontWeight: 800 }}>Get Easy</span> 🌱
+        <div className="nav-links">
+          <a href="#about">About Us</a>
+          <a href="#contact">Contact</a>
+          <a href="#faqs">FAQs</a>
         </div>
+
+        <div className="brand-center">
+          <span style={{ fontWeight: 800 }}>GetEzi</span>
+          <span style={{ fontSize: '12px', verticalAlign: 'top', marginLeft: '2px', transform: 'scale(2)', position: 'relative', left: '10px', top: '-3px' }}>🌱</span>
+        </div>
+
         <div className="landing-nav">
-          <button className="ghost small" onClick={() => onLogin()}>Log in</button>
-          <button className="primary small" onClick={onRegisterCustomer}>Create a free account</button>
+          <button className="login-outline-btn" onClick={() => onLogin()}>Log in</button>
         </div>
       </header>
 
       <div className="landing-content">
         <div className="landing-card">
-
-          <h2>For <i>Companies</i></h2>
-          <p>Your people, your business, your growth - beautifully managed.</p>
-          <button onClick={() => onLogin('admin')}>Login</button>
+          <div className="card-text-group">
+            <h2>For <i>Companies</i></h2>
+            <p>Your people, your business, your growth - beautifully managed.</p>
+          </div>
+          <button className="login-black-btn" onClick={() => onLogin('admin')}>Login</button>
           <div className="signup-prompt">
             Don't have an account? <span onClick={onRegisterAdmin} className="link">Sign up.</span>
           </div>
         </div>
 
         <div className="landing-card">
-          <h3>For <i>Customers</i></h3>
-          <p>Join us and experience smoother services, every step of the way.</p>
-          <button onClick={() => onLogin('customer')}>Login</button>
+          <div className="card-text-group">
+            <h2>For <i>Customers</i></h2>
+            <p>Join us and experience smoother services, every step of the way.</p>
+          </div>
+          <button className="login-black-btn" onClick={() => onLogin('customer')}>Login</button>
           <div className="signup-prompt">
             Don't have an account? <span onClick={onRegisterCustomer} className="link">Sign up.</span>
           </div>

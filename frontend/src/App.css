@@ -559,29 +559,34 @@ button.ghost.danger:hover {
   flex-direction: column;
   /* background moved to body */
   font-family: 'Satoshi', sans-serif;
-  background: radial-gradient(circle at 50% 50%, #f0f9ff 0%, #fff 100%);
 }
-
-
-/* Keyframes moved to index.css */
 
 .landing-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px 48px;
+  padding: 8px 24px;
+  /* Reduced to minimum comfortable size */
+  position: relative;
+  /* For absolute centering of brand */
 }
 
 .nav-links {
   display: flex;
-  gap: 32px;
+  gap: 40px;
+  /* Wider gap for "About Us Contact FAQs" */
 }
 
 .nav-links a {
   text-decoration: none;
   color: #000;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.nav-links a:hover {
+  opacity: 0.7;
 }
 
 .brand-center {
@@ -589,6 +594,7 @@ button.ghost.danger:hover {
   left: 50%;
   transform: translateX(-50%);
   font-size: 24px;
+  font-weight: 800;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -608,10 +614,12 @@ button.ghost.danger:hover {
   font-weight: 600;
   font-size: 14px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .login-outline-btn:hover {
-  background: #f9fafb;
+  background: #47b3ed;
   border-color: #d1d5db;
   transform: translateY(-1px);
 }
@@ -622,116 +630,96 @@ button.ghost.danger:hover {
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  /* Vertical center */
-  gap: 120px;
-  /* Increased gap for separation like design */
-  padding: 40px;
+  gap: 160px;
+  /* Match large gap in design */
+  padding: 0;
 }
 
 .landing-card {
-  grid-column-gap: 1.5rem;
-  grid-row-gap: 1.5rem;
-  text-align: center;
-  flex-flow: column;
-  justify-content: space-between;
   align-items: center;
   width: 100%;
   height: 440px;
   padding: 2rem;
   display: flex;
   position: relative;
-  max-width: 440px;
-  /* Keeping max-width as it wasn't explicitly removed but "width: 100%" was asked. I will keep it to avoid valid constraint loss, but user said "same as these", implying replacement. I'll keep max-width as a safety or remove if strict. The user said "check the sizes... make ... same as these". "width: 100%" combined with "max-width: 440px" is safe. If I remove max-width, it might stretch too much. I will strictly stick to their list but commonly keeping max-width is better. Wait, the user provided a block. I should probably use that block. The provided block says `width: 100%`. If I paste it exactly, it might break the "split" look if the container `landing-content` doesn't constrain it. `landing-content` has `gap: 160px` and `justify-content: center`. If cards are 100% width, they might try to take full space.
-  However, looking at previous CSS:
-  .landing-card {
-    flex: 1;
-    max-width: 440px;
-    ...
-  }
-  The user's CSS has `width: 100%`.
-  If I remove `flex: 1` and `max-width`, and set `width: 100%`, it will depend on the parent.
-  The parent `.landing-content` is `flex-direction: row`.
-  If both cards are `width: 100%`, they will shrink or overflow.
-  I will assume the user wants these properties applied *on top* or replacing the *sizing/layout* parts.
-  I will keep `max-width: 440px` from my previous edit if it makes sense, but the user said "make ... same as these".
-  I will apply the user's properties. I will *also* ensure it doesn't break the layout.
-  Actually, `width: 100%` inside a flex child often means "width of the container's allocated space".
-  I'll replace the existing .landing-card rule with the user's properties, but I might need to re-add `max-width` if it gets too huge.
-  Let's look at the properties again.
-  `height: 440px` - fixed height.
-  `justify-content: space-between` - this changes how content is spaced inside.
-  I'll just paste their CSS into the class.
-  */
-  grid-column-gap: 1.5rem;
-  grid-row-gap: 1.5rem;
+  gap: 50px;
+  margin-top: 10rem;
+  transform: scale(1.2);
   text-align: center;
   flex-flow: column;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  /* User requested */
-  max-width: 440px;
-  /* Retaining this to maintain the design intent of "split cards" not filling screen width */
-  height: 440px;
-  padding: 2rem;
+}
+
+.card-text-group {
   display: flex;
-  position: relative;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  align-items: center;
 }
 
 .landing-card h2 {
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 600;
+  /* Regular weight, letting italics do the heavy lifting or adjust if needed */
   margin: 0;
   color: #000;
 }
 
-.landing-card i {
-  font-style: italic;
+.landing-card h2 i {
   font-family: 'Satoshi', serif;
-  /* Or just existing font with italic */
+  /* Optional if using a serif font for italics, or just native italic */
+  font-style: italic;
+  font-weight: 600;
 }
 
 .landing-card p {
   color: var(--gray-500);
-  line-height: 1.6;
-  font-size: 18px;
+  line-height: 1.5;
+  font-size: 16px;
   margin: 0;
-  max-width: 360px;
-  /* Force wrap for cleaner look */
+  max-width: 320px;
+  /* Limit width for 2 lines */
+  font-weight: 500;
 }
 
-.landing-card button {
-  width: 180px;
-  padding: 21px 24px;
-  font-size: 18px;
+.login-black-btn {
   background: #000;
   color: #fff;
+  width: 120px;
+  padding: 1.1em 1.5em;
   border-radius: 6px;
   font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.2s;
 }
 
-.role-badge {
-  background: #000;
-  color: #fff;
-  padding: 6px 16px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  font-style: italic;
-  /* Matching design */
+.login-black-btn:hover {
+  transform: translateY(-2px);
+  background: #1a1a1a;
 }
 
 .signup-prompt {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--gray-500);
-  margin-top: 12px;
+  font-weight: 500;
 }
 
 .signup-prompt .link {
-  color: #10b981;
+  color: #06b6d4;
+  /* Cyan/Blue like standard link or specific design color */
+  color: #38bdf8;
+  /* Lighter sky blue */
+  color: #0ea5e9;
+  /* Sky 500 */
+  color: #0284c7;
+  /* Sky 600 - trying to match "Sign up." blue */
+  /* Re-evaluating image: looks like a bright sky blue */
+  color: #0ea5e9;
   font-weight: 600;
-  /* Green link color from design */
   cursor: pointer;
+  margin-left: 4px;
 }
 
 .signup-prompt .link:hover {
