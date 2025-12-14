@@ -216,7 +216,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: var(--gray-800);
+  /* background: var(--gray-800); */
   transform: translateY(-1px);
 }
 
@@ -619,7 +619,7 @@ button.ghost.danger:hover {
 }
 
 .login-outline-btn:hover {
-  background: #47b3ed;
+  background: #d1efff;
   border-color: #d1d5db;
   transform: translateY(-1px);
 }
