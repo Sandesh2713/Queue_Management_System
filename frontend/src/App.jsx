@@ -492,12 +492,16 @@ function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
   return (
     <div className="landing-container">
       <header className="landing-header">
-        <div className="brand">
-          <span style={{ fontWeight: 800 }}>Get Easy</span> 🌱
+        <nav className="nav-links">
+          <a href="#">About Us</a>
+          <a href="#">Contact</a>
+          <a href="#">FAQs</a>
+        </nav>
+        <div className="brand-center">
+          <span style={{ fontWeight: 800 }}>Get Ezi</span> 🌱
         </div>
-        <div className="landing-nav">
-          <button className="ghost small" onClick={() => onLogin()}>Log in</button>
-          <button className="primary small" onClick={onRegisterCustomer}>Create a free account</button>
+        <div className="landing-auth">
+          <button className="login-outline-btn" onClick={() => onLogin()}>Log in</button>
         </div>
       </header>
 
@@ -507,7 +511,8 @@ function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
           <p>Your people, your business, your growth - beautifully managed.</p>
           <button className="black-btn" onClick={() => onLogin('admin')}>Login</button>
           <div className="signup-prompt">
-            Don't have an account? <span onClick={onRegisterAdmin} className="link">Sign up.</span>
+            Don't have an account? <br />
+            <span onClick={onRegisterAdmin} className="link">Sign up.</span>
           </div>
         </div>
 
@@ -516,7 +521,8 @@ function LandingView({ onLogin, onRegisterAdmin, onRegisterCustomer }) {
           <p>Join us and experience smoother services, every step of the way.</p>
           <button className="black-btn" onClick={() => onLogin('customer')}>Login</button>
           <div className="signup-prompt">
-            Don't have an account? <span onClick={onRegisterCustomer} className="link">Sign up.</span>
+            Don't have an account? <br />
+            <span onClick={onRegisterCustomer} className="link">Sign up.</span>
           </div>
         </div>
       </div>
