@@ -64,11 +64,11 @@ export function AuthProvider({ children }) {
         return data.user;
     };
 
-    const sendOtp = async (email) => {
+    const sendOtp = async (email, type = 'verification') => {
         const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
+            body: JSON.stringify({ email, type }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);

@@ -283,16 +283,55 @@ app.get('/health', (req, res) => {
 
 /* Email Verification Routes */
 app.post('/api/auth/send-otp', async (req, res) => {
-  const { email } = req.body;
+  const { email, type = 'verification' } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
   // Generate 6 digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 mins
+
+  let subject, body;
+
+  if (type === 'reset') {
+    subject = 'One-Time Password for Password Change Verification';
+    body = `Dear User,
+
+A request has been received to change the password for your account associated with the GetEzi.
+
+Please use the following One-Time Password (OTP) to proceed with the password change:
+
+OTP: ${otp}
+
+🔴 This OTP is valid for 5 minutes and must be used only once.
+
+For security reasons, please do not share this code with anyone.
+
+If you did not initiate this request, please ignore this email and ensure your account credentials remain secure.
+
+Regards,
+GetEzi☘️ Team
+Streamlining public service experiences`;
+  } else {
+    // Default: Verification
+    subject = 'One-Time Password for Verification';
+    body = `Dear User,
+
+Please use the following One-Time Password (OTP) to verify your request:
+
+OTP: ${otp}
+
+🔴 This OTP is valid for 5 minutes and should not be shared with anyone.
+
+If this request was not initiated by you, please disregard this email.
+
+Regards,
+GetEzi☘️ Team
+Streamlining public service experiences`;
+  }
 
   try {
     emailVerificationsStmt.upsert.run({ email, otp, expires_at: expiresAt });
-    await sendEmail(email, 'Your Verification Code', `Your OTP is: ${otp}`);
+    await sendEmail(email, subject, body);
     res.json({ message: 'OTP sent' });
   } catch (err) {
     console.error(err);
@@ -350,15 +389,15 @@ app.post('/api/auth/reset-password', async (req, res) => {
     const user = usersStmt.getByEmail.get(email);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, user.id);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashedPassword, user.id);
 
     // Cleanup
     emailVerificationsStmt.delete.run(email);
 
     res.json({ success: true, message: 'Password reset successfully' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to reset password' });
+    console.error('Reset Password Error:', err.message, err.stack); // Log full details
+    res.status(500).json({ error: 'Failed to reset password: ' + err.message });
   }
 });
 

@@ -348,7 +348,7 @@ function ForgotPasswordView({ onBack, onVerify }) {
     setError('');
     setMessage('');
     try {
-      await sendOtp(email);
+      await sendOtp(email, 'reset');
       onVerify(email); // Switch to verification view
     } catch (err) {
       setError(err.message);
