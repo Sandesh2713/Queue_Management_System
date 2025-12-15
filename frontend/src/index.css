@@ -50,6 +50,7 @@ body {
   font-family: var(--font-sans);
   background: linear-gradient(90deg, #ffffff 0%, #e0f2fe 50%, #ffffff 100%);
   background-size: 200% 100%;
+  background-attachment: fixed;
   animation: gradientMove 8s ease-in-out infinite alternate;
   color: var(--text-main);
   line-height: 1.6;
