@@ -165,7 +165,7 @@ function LoginView({ onSuccess, onSwitch, onBack, role }) {
         {/* Forgot Password Link */}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <span
-            style={{ color: '#22c55e', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
+            style={{ color: '#0ea5e9', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}
             onClick={() => onSwitch('forgot-password')}
           >
             Forgot Password?
@@ -199,7 +199,7 @@ function LoginView({ onSuccess, onSwitch, onBack, role }) {
       </form>
 
       <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '14px', color: 'var(--gray-500)' }}>
-        Don't have an account? <span onClick={onSwitch} style={{ color: '#22c55e', fontWeight: '700', cursor: 'pointer' }}>Sign up.</span>
+        Don't have an account? <span onClick={onSwitch} style={{ color: '#0ea5e9', fontWeight: '700', cursor: 'pointer' }}>Sign up.</span>
       </div>
     </div>
   );
@@ -296,7 +296,7 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
       </form>
 
       <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '14px', color: 'var(--gray-500)' }}>
-        Have an account? <span onClick={onSwitch} style={{ color: '#22c55e', fontWeight: '700', cursor: 'pointer' }}>Login</span>
+        Have an account? <span onClick={onSwitch} style={{ color: '#0ea5e9', fontWeight: '700', cursor: 'pointer' }}>Login</span>
       </div>
     </div>
   );

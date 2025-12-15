@@ -807,24 +807,24 @@ button.ghost.danger:hover {
 
 .rounded-input:focus {
   background: #fff !important;
-  border-color: #22c55e !important;
-  /* Green focus */
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1) !important;
+  border-color: #0ea5e9 !important;
+  /* Sky Blue focus */
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1) !important;
 }
 
 .login-btn {
-  background: #22c55e !important;
-  /* Green */
+  background: #0ea5e9 !important;
+  /* Sky Blue */
   border-radius: 50px !important;
   padding: 14px !important;
   font-size: 16px !important;
   margin-top: 8px;
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3) !important;
 }
 
 .login-btn:hover {
-  background: #16a34a !important;
-  /* Darker green hover */
+  background: #0284c7 !important;
+  /* Darker Sky Blue hover */
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4) !important;
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4) !important;
 }
