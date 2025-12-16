@@ -218,6 +218,10 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
   const [exampleKey, setExampleKey] = useState('office-2024');
 
   useEffect(() => {
+    setRole(defaultRole);
+  }, [defaultRole]);
+
+  useEffect(() => {
     if (role === 'admin') {
       const examples = ['my-secret-key', 'admin-pass-123', 'office-blr-01', 'key-xyz-99', 'secure-entry'];
       let i = 0;
@@ -260,7 +264,6 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
             onChange={(e) => setName(e.target.value)}
             required
             placeholder="Full Name"
-            className="rounded-input"
           />
         </div>
         <div className="field">
@@ -270,7 +273,6 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="Email Address"
-            className="rounded-input"
           />
         </div>
         <div className="field">
@@ -280,7 +282,6 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
             onChange={(e) => setPassword(e.target.value)}
             required
             placeholder="Password"
-            className="rounded-input"
           />
         </div>
         <div className="field">
@@ -289,22 +290,11 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder={role === 'admin' ? "Phone (Required)" : "Phone (Optional)"}
-            className="rounded-input"
             required={role === 'admin'}
           />
         </div>
 
-        <div className="field">
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="rounded-input"
-            style={{ width: '100%', appearance: 'none', background: '#f8fafc url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007CB2%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E") no-repeat right 16px center', backgroundSize: '12px' }}
-          >
-            <option value="customer">I am a Customer</option>
-            <option value="admin">I am an Office Manager</option>
-          </select>
-        </div>
+
 
         {role === 'admin' && (
           <div className="field">
@@ -314,7 +304,6 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
               onChange={(e) => setAdminKey(e.target.value)}
               required
               placeholder="Create Admin Key"
-              className="rounded-input"
             />
             <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginTop: '4px', paddingLeft: '4px' }}>
               You will need this key to login and perform admin actions. <br />
