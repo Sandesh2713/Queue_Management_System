@@ -748,7 +748,7 @@ const ProfileMenu = ({ user, onNavigate, onLogout }) => {
   );
 };
 
-const ProfileView = ({ user, onBack }) => {
+const ProfileView = ({ user, onBack, office }) => {
   return (
     <div className="panel" style={{ maxWidth: '600px', margin: '40px auto' }}>
       <div className="panel-header">
@@ -778,6 +778,38 @@ const ProfileView = ({ user, onBack }) => {
             <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Member Since</label>
             <div style={{ fontSize: '16px' }}>{new Date(user.created_at).toLocaleDateString()}</div>
           </div>
+
+          {user.role === 'admin' && office && (
+            <>
+              <div style={{ height: '1px', background: 'var(--gray-200)', margin: '8px 0' }} />
+              <h4 style={{ marginBottom: '12px', color: 'var(--gray-900)' }}>Office Details</h4>
+
+              <div className="info-row">
+                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Office Name</label>
+                <div style={{ fontSize: '16px' }}>{office.name}</div>
+              </div>
+              <div className="info-row">
+                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Working Hours</label>
+                <div style={{ fontSize: '16px' }}>{office.operating_hours || office.operatingHours || 'Not set'}</div>
+              </div>
+              <div className="info-row">
+                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Service Time</label>
+                <div style={{ fontSize: '16px' }}>{office.avg_service_minutes} mins</div>
+              </div>
+              <div className="info-row">
+                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Services Offered</label>
+                <div style={{ fontSize: '16px' }}>{office.service_type}</div>
+              </div>
+              <div className="info-row">
+                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Location</label>
+                <div style={{ fontSize: '16px' }}>
+                  {office.latitude && office.longitude
+                    ? `${Number(office.latitude).toFixed(4)}, ${Number(office.longitude).toFixed(4)}`
+                    : 'Not set'}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1145,7 +1177,11 @@ function App() {
           }}
         />
       ) : view === 'profile' ? (
-        <ProfileView user={user} onBack={() => setView(user.role === 'admin' ? 'admin' : 'customer')} />
+        <ProfileView
+          user={user}
+          onBack={() => setView(user.role === 'admin' ? 'admin' : 'customer')}
+          office={user.role === 'admin' ? offices[0] : null}
+        />
       ) : view === 'settings' ? (
         <SettingsView onBack={() => setView(user.role === 'admin' ? 'admin' : 'customer')} />
       ) : (
