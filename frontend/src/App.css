@@ -828,3 +828,13 @@ button.ghost.danger:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4) !important;
 }
+/* Animated Text Fade */
+.fade-text {
+  animation: fadeInOut 2.5s infinite;
+  display: inline-block;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0; transform: translateY(5px); }
+  20%, 80% { opacity: 1; transform: translateY(0); }
+}

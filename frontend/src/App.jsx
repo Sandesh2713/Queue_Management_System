@@ -215,6 +215,20 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
   const [adminKey, setAdminKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [exampleKey, setExampleKey] = useState('office-2024');
+
+  useEffect(() => {
+    if (role === 'admin') {
+      const examples = ['my-secret-key', 'admin-pass-123', 'office-blr-01', 'key-xyz-99', 'secure-entry'];
+      let i = 0;
+      // Sync with CSS animation (2.5s total duration)
+      const interval = setInterval(() => {
+        i = (i + 1) % examples.length;
+        setExampleKey(examples[i]);
+      }, 2500);
+      return () => clearInterval(interval);
+    }
+  }, [role]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -303,7 +317,8 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
               className="rounded-input"
             />
             <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginTop: '4px', paddingLeft: '4px' }}>
-              You will need this key to login and perform admin actions.
+              You will need this key to login and perform admin actions. <br />
+              <span style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>Example: <span className="fade-text">{exampleKey}</span></span>
             </div>
           </div>
         )}
