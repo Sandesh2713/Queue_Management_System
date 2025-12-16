@@ -212,6 +212,7 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState(defaultRole);
+  const [adminKey, setAdminKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -219,7 +220,7 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
     e.preventDefault();
     setLoading(true);
     try {
-      await register(name, email, password, phone, role);
+      await register(name, email, password, phone, role, role === 'admin' ? adminKey : undefined);
       onSuccess();
     } catch (err) {
       setError(err.message);
@@ -273,8 +274,9 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (Optional)"
+            placeholder={role === 'admin' ? "Phone (Required)" : "Phone (Optional)"}
             className="rounded-input"
+            required={role === 'admin'}
           />
         </div>
 
@@ -289,6 +291,22 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
             <option value="admin">I am an Office Manager</option>
           </select>
         </div>
+
+        {role === 'admin' && (
+          <div className="field">
+            <input
+              type="password"
+              value={adminKey}
+              onChange={(e) => setAdminKey(e.target.value)}
+              required
+              placeholder="Create Admin Key"
+              className="rounded-input"
+            />
+            <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginTop: '4px', paddingLeft: '4px' }}>
+              You will need this key to login and perform admin actions.
+            </div>
+          </div>
+        )}
 
         <button type="submit" className="login-btn" disabled={loading}>
           {loading ? 'Creating Account...' : 'Sign Up'}

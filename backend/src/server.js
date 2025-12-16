@@ -121,8 +121,8 @@ const tokensStmt = {
 
 const usersStmt = {
   insert: db.prepare(`
-    INSERT INTO users (id, name, email, password_hash, phone, role, created_at)
-    VALUES (@id, @name, @email, @password_hash, @phone, @role, @created_at)
+    INSERT INTO users (id, name, email, password_hash, phone, role, created_at, admin_key)
+    VALUES (@id, @name, @email, @password_hash, @phone, @role, @created_at, @admin_key)
   `),
   getByEmail: db.prepare(`SELECT * FROM users WHERE email = ?`),
   getById: db.prepare(`SELECT * FROM users WHERE id = ?`),
@@ -436,12 +436,15 @@ app.post('/api/offices', requireAdmin, (req, res) => {
 
 /* Auth Routes */
 app.post('/api/auth/register', (req, res) => {
-  const { name, email, password, phone, role } = req.body;
+  const { name, email, password, phone, role, adminKey } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email, and password are required' });
   }
   if (role && !['customer', 'admin'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
+  }
+  if (role === 'admin' && !phone) {
+    return res.status(400).json({ error: 'Phone number is required for Office Managers' });
   }
   const existing = usersStmt.getByEmail.get(email);
   if (existing) {
@@ -457,6 +460,7 @@ app.post('/api/auth/register', (req, res) => {
     role: role || 'customer',
     is_verified: 0,
     created_at: toIso(),
+    admin_key: (role === 'admin' && adminKey) ? adminKey : null,
   };
   usersStmt.insert.run(user);
   const token = jwt.sign({ id: user.id }, jwtSecret, { expiresIn: '30d' });
@@ -475,7 +479,9 @@ app.post('/api/auth/login', (req, res) => {
 
   // Enforce Admin Key for Admin Login
   if (user.role === 'admin') {
-    if (providedKey !== adminKey) {
+    // Check user-specific key if exists, else fallback to global key
+    const requiredKey = user.admin_key || adminKey;
+    if (providedKey !== requiredKey) {
       return res.status(403).json({ error: 'Invalid Admin Key' });
     }
   }
