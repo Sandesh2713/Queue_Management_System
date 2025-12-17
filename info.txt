@@ -1,0 +1,73 @@
+Project Summary: Queue Management System
+1. Project Overview
+GetEzi is a smart, web-based Queue Management System designed to reduce crowding and waiting times in public service centers (offices, hospitals, banks). It connects service providers (Admins) with customers, allowing for real-time queue monitoring, remote booking, and intelligent time estimation.
+
+2. Architecture & Tech Stack
+Frontend: React (SPA), Vite, Vanilla CSS.
+Backend: Node.js, Express.
+Database: SQLite (better-sqlite3), WAL mode enabled.
+Authentication: JWT (JSON Web Tokens).
+Email Service: Nodemailer (Gmail SMTP).
+3. Core Features & Flows
+3.1 Authentication & User Management
+The system supports two user roles: Customer and Admin (Office Manager).
+
+Registration:
+Customer: Requires Name, Email, Password, DOB, Gender.
+Admin: Requires additional "Admin Key" (for security) and Phone Number.
+Login: Email/Password. Admins must also provide their unique Admin Key.
+Email Verification:
+Upon interaction (or registration flows), users verify their email via a 6-digit OTP (One-Time Password).
+OTP expires in 5 minutes.
+Password Reset:
+"Forgot Password" flow triggers an email with an OTP.
+Verified OTP allows setting a new password.
+3.2 Office Management (Admin Side)
+Office Creation: Admins set up their digital office/counter.
+Settings: Name, Service Type, Daily Capacity, Operating Hours, Location (Lat/Lng), Avg Service Time per token.
+Constraint: Currently limited to 1 office per Admin.
+Dashboard: Real-time view of the queue, current token serving, and availability controls.
+3.3 Token & Queue Management
+The heart of the system is the intelligent token logic.
+
+Booking Process
+When a customer requests a token for an office:
+
+Direct Booking ("Booked"): If the office has available_today slots > 0, the user gets a "Booked" status. This is treated as an immediate appointment or reserved seat.
+Virtual Queue ("Queued"): If availability is 0, the user enters a "Queued" status. They are assigned a position in the waitlist.
+Time Management (ETA)
+The system calculates an Estimated Time of Arrival (ETA) for every token:
+
+Formula: ETA = (Queue Wait Time) + (Travel Time)
+Queue Wait Time: 
+(Position in Queue) * (Avg Service Time of Office)
+Travel Time: Calculated using Haversine distance between User's location and Office location (approx. speed assumed).
+Token Lifecycle & Statuses
+booked: Seat reserved, waiting to be called.
+queued: In waiting list, waiting for a free slot.
+called: Currently being served. (Prioritized at the top of lists).
+completed: Service finished.
+cancelled: User or Admin cancelled the request.
+no-show: User failed to appear.
+Sorting & Priority Logic
+Display Order: In list views, 'Called' tokens appear first. Others are sorted by created_at (Oldest first).
+"Call Next" Logic: When Admin clicks "Call Next":
+Priority 1: booked tokens (Sorted by creation time).
+Priority 2: queued tokens (Sorted by position).
+Note: Calling a queued user decreases the office's available_today count if it was full.
+3.4 Notifications
+Email: Used for OTPs (Verification/Password Reset).
+In-App: Users receive notifications for:
+Being "Called" (Your turn now).
+Proximity Alert: If a user is in the queue and their estimated wait time minus travel time drops below 20 minutes, they get a "Head to the office" alert.
+3.5 Automation & Archival
+Daily Cleanup (Cron Job): Runs every day at 12:00 AM.
+Action: Moves all tokens from the active tokens table to the token_history table.
+Reset: Clears the active queue board and resets office available_today capacity to the default daily limit.
+4. Database Schema
+users: Stores profile info, password hash, role, and verification status.
+offices: Stores office configuration (capacity, location, owner).
+tokens: Active requests. Links User to Office. Stores status, ETA, and position.
+token_history: Archived tokens for past days.
+notifications: In-app alerts.
+email_verifications: Temporary storage for active OTPs.
