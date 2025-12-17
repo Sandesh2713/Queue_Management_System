@@ -9,7 +9,8 @@ const jwt = require('jsonwebtoken');
 const cron = require('node-cron');
 const nodemailer = require('nodemailer');
 
-dotenv.config();
+const path = require('path');
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -18,6 +19,8 @@ const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const jwtSecret = process.env.JWT_SECRET || 'super-secret-jwt-key';
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
+
+console.log('SMTP Config Loaded:', smtpUser ? 'Yes' : 'No');
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',

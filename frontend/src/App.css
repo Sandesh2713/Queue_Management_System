@@ -554,11 +554,16 @@ button.ghost.danger:hover {
 
 /* Landing Page */
 .landing-container {
-  min-height: 100vh;
+  height: 100vh;
+  /* Fixed height */
   display: flex;
   flex-direction: column;
   /* background moved to body */
   font-family: 'Satoshi', sans-serif;
+  overflow: hidden;
+  /* No scroll at all */
+  width: 100%;
+  position: relative;
 }
 
 .landing-header {
@@ -828,6 +833,7 @@ button.ghost.danger:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4) !important;
 }
+
 /* Animated Text Fade */
 .fade-text {
   animation: fadeInOut 2.5s infinite;
@@ -835,6 +841,16 @@ button.ghost.danger:hover {
 }
 
 @keyframes fadeInOut {
-  0%, 100% { opacity: 0; transform: translateY(5px); }
-  20%, 80% { opacity: 1; transform: translateY(0); }
+
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  20%,
+  80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
