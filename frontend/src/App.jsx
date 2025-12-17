@@ -211,7 +211,10 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('');
   const [role, setRole] = useState(defaultRole);
   const [adminKey, setAdminKey] = useState('');
   const [error, setError] = useState('');
@@ -239,7 +242,7 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
     e.preventDefault();
     setLoading(true);
     try {
-      await register(name, email, password, phone, role, role === 'admin' ? adminKey : undefined);
+      await register(name, email, password, phone, role, role === 'admin' ? adminKey : undefined, dob, gender);
       onSuccess();
     } catch (err) {
       setError(err.message);
@@ -296,6 +299,33 @@ function RegisterView({ onSuccess, onSwitch, defaultRole = 'customer', onBack })
         </div>
 
 
+
+        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <label className="field">
+            <span>Date of Birth</span>
+            <input
+              type="date"
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+              required
+            />
+          </label>
+          <label className="field">
+            <span>Gender</span>
+            <select
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+              required
+              className="rounded-input"
+              style={{ height: '48px' }} // Match input height roughly
+            >
+              <option value="" disabled>Select Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+        </div>
 
         {role === 'admin' && (
           <div className="field">
@@ -1040,43 +1070,57 @@ const ProfileView = ({ user, onBack, office }) => {
             <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Phone Number</label>
             <div style={{ fontSize: '16px' }}>{user.phone || 'Not provided'}</div>
           </div>
-          <div className="info-row">
-            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Member Since</label>
-            <div style={{ fontSize: '16px' }}>{new Date(user.created_at).toLocaleDateString()}</div>
-          </div>
-
-          {user.role === 'admin' && office && (
-            <>
-              <div style={{ height: '1px', background: 'var(--gray-200)', margin: '8px 0' }} />
-              <h4 style={{ marginBottom: '12px', color: 'var(--gray-900)' }}>Office Details</h4>
-
-              <div className="info-row">
-                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Office Name</label>
-                <div style={{ fontSize: '16px' }}>{office.name}</div>
-              </div>
-              <div className="info-row">
-                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Working Hours</label>
-                <div style={{ fontSize: '16px' }}>{office.operating_hours || office.operatingHours || 'Not set'}</div>
-              </div>
-              <div className="info-row">
-                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Service Time</label>
-                <div style={{ fontSize: '16px' }}>{office.avg_service_minutes} mins</div>
-              </div>
-              <div className="info-row">
-                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Services Offered</label>
-                <div style={{ fontSize: '16px' }}>{office.service_type}</div>
-              </div>
-              <div className="info-row">
-                <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Location</label>
-                <div style={{ fontSize: '16px' }}>
-                  {office.latitude && office.longitude
-                    ? `${Number(office.latitude).toFixed(4)}, ${Number(office.longitude).toFixed(4)}`
-                    : 'Not set'}
-                </div>
-              </div>
-            </>
-          )}
         </div>
+        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="info-row">
+            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Date of Birth</label>
+            <div style={{ fontSize: '16px' }}>{user.dob ? new Date(user.dob).toLocaleDateString() : 'N/A'}</div>
+          </div>
+          <div className="info-row">
+            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Age</label>
+            <div style={{ fontSize: '16px' }}>{user.age || 'N/A'}</div>
+          </div>
+        </div>
+        <div className="info-row">
+          <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Gender</label>
+          <div style={{ fontSize: '16px' }}>{user.gender || 'Not provided'}</div>
+        </div>
+        <div className="info-row">
+          <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Member Since</label>
+          <div style={{ fontSize: '16px' }}>{new Date(user.created_at).toLocaleDateString()}</div>
+        </div>
+
+        {user.role === 'admin' && office && (
+          <>
+            <div style={{ height: '1px', background: 'var(--gray-200)', margin: '8px 0' }} />
+            <h4 style={{ marginBottom: '12px', color: 'var(--gray-900)' }}>Office Details</h4>
+
+            <div className="info-row">
+              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Office Name</label>
+              <div style={{ fontSize: '16px' }}>{office.name}</div>
+            </div>
+            <div className="info-row">
+              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Working Hours</label>
+              <div style={{ fontSize: '16px' }}>{office.operating_hours || office.operatingHours || 'Not set'}</div>
+            </div>
+            <div className="info-row">
+              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Service Time</label>
+              <div style={{ fontSize: '16px' }}>{office.avg_service_minutes} mins</div>
+            </div>
+            <div className="info-row">
+              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Services Offered</label>
+              <div style={{ fontSize: '16px' }}>{office.service_type}</div>
+            </div>
+            <div className="info-row">
+              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Location</label>
+              <div style={{ fontSize: '16px' }}>
+                {office.latitude && office.longitude
+                  ? `${Number(office.latitude).toFixed(4)}, ${Number(office.longitude).toFixed(4)}`
+                  : 'Not set'}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

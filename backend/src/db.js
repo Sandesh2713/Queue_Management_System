@@ -34,6 +34,9 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   phone TEXT,
   role TEXT DEFAULT 'customer',
+  dob TEXT,
+  gender TEXT,
+  age INTEGER,
   is_verified INTEGER DEFAULT 0,
   created_at TEXT NOT NULL
 );

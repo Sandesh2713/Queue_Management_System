@@ -124,8 +124,8 @@ const tokensStmt = {
 
 const usersStmt = {
   insert: db.prepare(`
-    INSERT INTO users (id, name, email, password_hash, phone, role, created_at, admin_key)
-    VALUES (@id, @name, @email, @password_hash, @phone, @role, @created_at, @admin_key)
+    INSERT INTO users (id, name, email, password_hash, phone, role, created_at, admin_key, dob, gender, age)
+    VALUES (@id, @name, @email, @password_hash, @phone, @role, @created_at, @admin_key, @dob, @gender, @age)
   `),
   getByEmail: db.prepare(`SELECT * FROM users WHERE email = ?`),
   getById: db.prepare(`SELECT * FROM users WHERE id = ?`),
@@ -439,7 +439,7 @@ app.post('/api/offices', requireAdmin, (req, res) => {
 
 /* Auth Routes */
 app.post('/api/auth/register', (req, res) => {
-  const { name, email, password, phone, role, adminKey } = req.body;
+  const { name, email, password, phone, role, adminKey, dob, gender } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email, and password are required' });
   }
@@ -454,6 +454,18 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(409).json({ error: 'Email already registered' });
   }
   const hashedPassword = bcrypt.hashSync(password, 10);
+  const calculateAge = (birthDateString) => {
+    if (!birthDateString) return null;
+    const today = new Date();
+    const birthDate = new Date(birthDateString);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   const user = {
     id: uuidv4(),
     name,
@@ -461,6 +473,9 @@ app.post('/api/auth/register', (req, res) => {
     password_hash: hashedPassword,
     phone: phone || '',
     role: role || 'customer',
+    dob: dob || null,
+    gender: gender || null,
+    age: calculateAge(dob),
     is_verified: 0,
     created_at: toIso(),
     admin_key: (role === 'admin' && adminKey) ? adminKey : null,
