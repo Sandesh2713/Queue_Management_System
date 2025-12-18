@@ -473,7 +473,7 @@ app.get('/api/offices/:id', (req, res) => {
   const { id } = req.params;
   try {
     const office = ensureOffice(id);
-    const tokens = tokensStmt.getForOffice.all(id);
+    const tokens = enrichTokens(tokensStmt.getForOffice.all(id));
     // Add extra stats expected by frontend
     const queueCount = tokens.filter(t => t.status === 'WAIT' || t.status === 'queued').length;
     res.json({ office: { ...office, queueCount }, tokens });

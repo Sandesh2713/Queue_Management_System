@@ -101,45 +101,43 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, c
     statusMsg = 'Paused';
     subMsg = office.pause_message || `Service paused: ${office.pause_reason}`;
   } else if (token.status === 'CALLED') {
-    subMsg = 'Please proceed to the counter';
+    statusMsg = 'At Counter';
+    subMsg = 'Please proceed to the counter.';
   } else if (token.status === 'ALLOCATED') {
-    // SCENARIO 1 or 2/3 depending on eta
-    if (!token.eta || token.eta <= 0) {
-      // BATCH 1 (Direct Access)
-      statusMsg = 'You are Next';
-      subMsg = 'Please proceed to the counter';
-    } else {
-      // BATCH 2 & 3 (Waiting for counter)
-      statusMsg = 'In Office Queue';
-      const callTime = token.service_start_time ? fmtTime(token.service_start_time) : 'Short wait...';
-      subMsg = `Estimated time to be called: ${callTime}`;
-    }
+    statusMsg = 'In Office Waiting Area';
+    subMsg = 'Please wait, your turn will be called shortly.';
   } else if (token.status === 'WAIT') {
     // SCENARIO 4 (Extended Wait / Remote)
-    statusMsg = 'Wait at Location';
+    if (token.time_state === 'PAST' || !token.service_start_time) {
+      statusMsg = 'Be Ready';
+      subMsg = (
+        <div style={{ color: 'var(--primary)', fontWeight: 600 }}>
+          Please be ready, your turn is approaching.
+        </div>
+      );
+    } else {
+      statusMsg = 'Wait at Location';
+      const callTimeMs = new Date(token.service_start_time).getTime();
 
-    // Logic: Allocation Time = Call Time - (3 * ServiceTime)
-    // Travel Start = Allocation Time - Travel Time
+      // Relative Time First
+      const minsToCall = Math.ceil((callTimeMs - Date.now()) / 60000);
+      const callRel = minsToCall > 0 ? `In ${minsToCall} mins` : 'Very soon';
 
-    const callTimeMs = token.service_start_time ? new Date(token.service_start_time).getTime() : Date.now();
-    const allocOffset = 3 * serviceMinutes * 60000;
-    const travelOffset = (token.travel_time_minutes || 15) * 60000;
+      const allocOffset = 3 * serviceMinutes * 60000;
+      const travelOffset = (token.travel_time_minutes || 15) * 60000;
 
-    // Heuristic: Ensure allocation time is roughly correct even if logic shifted
-    let allocTimeMs = callTimeMs - allocOffset;
-    if (allocTimeMs < Date.now()) allocTimeMs = Date.now(); // Clamp
+      let allocTimeMs = callTimeMs - allocOffset;
+      if (allocTimeMs < Date.now()) allocTimeMs = Date.now(); // Clamp
+      const travelStartMs = allocTimeMs - travelOffset;
+      const travelStr = fmtTime(new Date(travelStartMs));
 
-    const travelStartMs = allocTimeMs - travelOffset;
-
-    const allocStr = fmtTime(new Date(allocTimeMs));
-    const travelStr = fmtTime(new Date(travelStartMs));
-
-    subMsg = (
-      <div style={{ lineHeight: '1.4' }}>
-        <div>You will be called to the office at <strong>{allocStr}</strong></div>
-        <div style={{ color: '#d93025' }}>Please start traveling at <strong>{travelStr}</strong></div>
-      </div>
-    );
+      subMsg = (
+        <div style={{ lineHeight: '1.4' }}>
+          <div>Called in: <strong>{callRel}</strong></div>
+          <div style={{ color: '#d93025' }}>Start traveling by <strong>{travelStr}</strong></div>
+        </div>
+      );
+    }
   } else if (token.status === 'COMPLETED') {
     statusMsg = 'Completed';
     subMsg = 'Thank you for visiting';
