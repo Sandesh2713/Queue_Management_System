@@ -123,6 +123,14 @@ try { db.exec(`ALTER TABLE offices ADD COLUMN owner_id TEXT`); } catch (e) { }
 try { db.exec(`ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0`); } catch (e) { }
 try { db.exec(`ALTER TABLE users ADD COLUMN admin_key TEXT`); } catch (e) { }
 
+// History Archival & Retention
+try { db.exec(`ALTER TABLE users ADD COLUMN history_retention_days INTEGER DEFAULT 30`); } catch (e) { }
+try { db.exec(`ALTER TABLE token_history ADD COLUMN eta_minutes INTEGER`); } catch (e) { }
+try { db.exec(`ALTER TABLE token_history ADD COLUMN travel_time_minutes INTEGER`); } catch (e) { }
+try { db.exec(`ALTER TABLE token_history ADD COLUMN allocation_time TEXT`); } catch (e) { }
+try { db.exec(`ALTER TABLE token_history ADD COLUMN service_start_time TEXT`); } catch (e) { }
+try { db.exec(`ALTER TABLE token_history ADD COLUMN expected_completion_time TEXT`); } catch (e) { }
+
 // New Columns for Queue Logic Rebuild
 try { db.exec(`ALTER TABLE offices ADD COLUMN counter_count INTEGER DEFAULT 1`); } catch (e) { }
 try { db.exec(`ALTER TABLE offices ADD COLUMN max_allocated INTEGER DEFAULT 3`); } catch (e) { }
@@ -132,4 +140,3 @@ try { db.exec(`ALTER TABLE tokens ADD COLUMN expected_completion_time TEXT`); } 
 try { db.exec(`ALTER TABLE tokens ADD COLUMN last_updated_at TEXT`); } catch (e) { }
 
 module.exports = db;
-

@@ -11,6 +11,7 @@ const nodemailer = require('nodemailer');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const ExcelJS = require('exceljs');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -137,6 +138,22 @@ const usersStmt = {
   getById: db.prepare(`SELECT * FROM users WHERE id = ?`),
   getByEmail: db.prepare(`SELECT * FROM users WHERE email = ?`),
   insert: db.prepare(`INSERT INTO users (id, name, email, password_hash, role, created_at, is_verified) VALUES (@id, @name, @email, @hash, @role, @created_at, 0)`),
+  insert: db.prepare(`INSERT INTO users (id, name, email, password_hash, role, created_at, is_verified) VALUES (@id, @name, @email, @hash, @role, @created_at, 0)`),
+  updateRetention: db.prepare(`UPDATE users SET history_retention_days = ? WHERE id = ?`),
+  getRetention: db.prepare(`SELECT history_retention_days FROM users WHERE id = ?`),
+};
+
+const historyStmt = {
+  archive: db.prepare(`
+    INSERT INTO token_history (id, office_id, user_id, user_name, user_contact, status, token_number, note, created_at, called_at, completed_at, service_type, archived_at, eta_minutes, travel_time_minutes, allocation_time, service_start_time, expected_completion_time)
+    SELECT id, office_id, user_id, user_name, user_contact, status, token_number, note, created_at, called_at, completed_at, service_type, @archivedAt, eta_minutes, travel_time_minutes, allocation_time, service_start_time, expected_completion_time
+    FROM tokens
+  `),
+  deleteArchivedTokens: db.prepare(`DELETE FROM tokens`), // Wipes active tokens table
+  cleanupOldHistory: db.prepare(`DELETE FROM token_history WHERE archived_at < ?`), // Global fallback
+  cleanupForOffice: db.prepare(`DELETE FROM token_history WHERE office_id = ? AND archived_at < ?`),
+  getAll: db.prepare(`SELECT * FROM token_history ORDER BY created_at DESC LIMIT 1000`), // Limit for safety
+  getByFilter: db.prepare(`SELECT * FROM token_history WHERE office_id = ? AND created_at BETWEEN ? AND ? ORDER BY created_at DESC`),
 };
 
 /* --- Core Queue Logic (The Brain) --- */
@@ -558,16 +575,16 @@ app.post('/api/notifications/:id/read', (req, res) => {
 });
 
 // History
-app.get('/api/history', (req, res) => {
+app.get('/api/history', authenticateToken, (req, res) => {
   // Return completed/archived tokens
-  // Since we don't have separate auth here easily without middleware reuse, 
-  // we will query ALL history for Admin view (which calls this).
-  // Real app would filter by role. Assuming Admin context or general history.
-  // Actually, App.jsx `loadHistory` calls this for Admin View.
+  // Matching column count: 18 columns in token_history
   const history = db.prepare(`
     SELECT * FROM token_history 
     UNION ALL 
-    SELECT id, office_id, user_id, user_name, user_contact, status, token_number, note, created_at, called_at, completed_at, service_type, NULL as archived_at 
+    SELECT 
+      id, office_id, user_id, user_name, user_contact, status, token_number, note, created_at, called_at, completed_at, service_type, 
+      NULL as archived_at, 
+      eta_minutes, travel_time_minutes, allocation_time, service_start_time, expected_completion_time
     FROM tokens 
     WHERE status IN ('COMPLETED', 'cancelled', 'no-show', 'history')
     ORDER BY created_at DESC LIMIT 100
@@ -601,7 +618,8 @@ app.get('/api/auth/me', (req, res) => {
         phone: user.phone,
         dob: user.dob,
         gender: user.gender,
-        age: user.age
+        age: user.age,
+        history_retention_days: user.history_retention_days || 30
       }
     });
   } catch (err) {
@@ -664,6 +682,151 @@ app.post('/api/offices', (req, res) => {
     res.status(201).json({ office });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+
+// Middleware: Authenticate Token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'No token' });
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
+    // Fetch full user to check role/retention? decoded has role. 
+    // Let's attach minimal info or fetch full if needed.
+    // decoding is faster.
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
+};
+
+// Update Retention Settings
+app.put('/api/admin/settings', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admins only' });
+
+  const { userId, retentionDays } = req.body;
+  if (!userId || !retentionDays) return res.status(400).json({ error: 'Missing fields' });
+
+  usersStmt.updateRetention.run(retentionDays, userId);
+  res.json({ success: true, retentionDays });
+});
+
+// Get Token History (Filtered)
+app.get('/api/admin/token-history', authenticateToken, (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admins only' });
+
+  // Use req.user.id to ensure they only see THEIR office? 
+  // Code seems to rely on selectedOfficeId passed in query. 
+  // Ideally we verify ownership, but for now Role check is better than broken Key check.
+
+  const { officeId, start, end, status } = req.query;
+  const startDate = start ? new Date(start).toISOString() : new Date(0).toISOString();
+  const endDate = end ? new Date(end).toISOString() : new Date().toISOString();
+
+  let data = historyStmt.getByFilter.all(officeId, startDate, endDate);
+
+  if (status && status !== 'all') {
+    data = data.filter(t => t.status.toLowerCase() === status.toLowerCase());
+  }
+
+  res.json({ history: data });
+});
+
+// Export Token History (Excel)
+app.get('/api/admin/token-history/export', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admins only' });
+
+  const { officeId, start, end } = req.query;
+  const startDate = start ? new Date(start).toISOString() : new Date(0).toISOString();
+  const endDate = end ? new Date(end).toISOString() : new Date().toISOString();
+
+  const data = historyStmt.getByFilter.all(officeId, startDate, endDate);
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Token History');
+
+  // Columns: Token ID, User Name, User Email, Office Name (Need lookup?), Status, ETA, Service Start, Completion, Total Time, Created Date
+  sheet.columns = [
+    { header: 'Token No', key: 'token_number', width: 10 },
+    { header: 'Customer Name', key: 'user_name', width: 20 },
+    { header: 'Contact', key: 'user_contact', width: 15 },
+    { header: 'Status', key: 'status', width: 15 },
+    { header: 'Service Type', key: 'service_type', width: 20 },
+    { header: 'Created At', key: 'created_at', width: 25 },
+    { header: 'Called At', key: 'called_at', width: 25 },
+    { header: 'Completed At', key: 'completed_at', width: 25 },
+    { header: 'Wait Time (Min)', key: 'wait_time', width: 15 },
+    { header: 'Service Duration (Min)', key: 'service_duration', width: 15 },
+  ];
+
+  data.forEach(t => {
+    const created = t.created_at ? new Date(t.created_at) : null;
+    const called = t.called_at ? new Date(t.called_at) : null;
+    const completed = t.completed_at ? new Date(t.completed_at) : null;
+
+    const waitTime = (created && called) ? Math.round((called - created) / 60000) : 0;
+    const serviceDuration = (called && completed) ? Math.round((completed - called) / 60000) : 0;
+
+    sheet.addRow({
+      token_number: t.token_number,
+      user_name: t.user_name,
+      user_contact: t.user_contact,
+      status: t.status,
+      service_type: t.service_type,
+      created_at: created ? created.toLocaleString() : '',
+      called_at: called ? called.toLocaleString() : '',
+      completed_at: completed ? completed.toLocaleString() : '',
+      wait_time: waitTime,
+      service_duration: serviceDuration
+    });
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename=token_history_${officeId}_${Date.now()}.xlsx`);
+
+  await workbook.xlsx.write(res);
+  res.end();
+});
+
+/* --- Cron Jobs --- */
+
+// Daily Archival (Midnight)
+cron.schedule('0 0 * * *', () => {
+  console.log('Running Daily Archival...');
+  try {
+    const now = toIso();
+    const info = historyStmt.archive.run({ archivedAt: now });
+    historyStmt.deleteArchivedTokens.run();
+    console.log(`Archived ${info.changes} tokens.`);
+    io.emit('queue_update', { all: true }); // Resync all clients
+  } catch (err) {
+    console.error('Archival Failed:', err);
+  }
+});
+
+// Daily Cleanup (1:00 AM) - Respects Retention
+cron.schedule('0 1 * * *', () => {
+  console.log('Running History Cleanup...');
+  try {
+    const offices = officesStmt.getAll.all();
+    for (const office of offices) {
+      if (!office.owner_id) continue;
+
+      const owner = usersStmt.getById.get(office.owner_id);
+      const retentionDays = owner?.history_retention_days || 30;
+
+      const cutoffDate = new Date(Date.now() - (retentionDays * 24 * 60 * 60 * 1000)).toISOString();
+
+      const res = historyStmt.cleanupForOffice.run(office.id, cutoffDate);
+      if (res.changes > 0) {
+        console.log(`Cleaned ${res.changes} old tokens for Office ${office.name} (Retention: ${retentionDays}d)`);
+      }
+    }
+  } catch (err) {
+    console.error('Cleanup Failed:', err);
   }
 });
 

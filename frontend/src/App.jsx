@@ -68,7 +68,7 @@ async function fetchJSON(path, options = {}) {
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
 
@@ -1158,24 +1158,181 @@ const ProfileView = ({ user, onBack, office }) => {
   );
 };
 
-const SettingsView = ({ onBack }) => {
+const SettingsView = ({ user, onBack, adminKey, selectedOfficeId }) => {
+  const [retention, setRetention] = useState(user.history_retention_days || 30);
+  const [exportStart, setExportStart] = useState(new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]);
+  const [exportEnd, setExportEnd] = useState(new Date().toISOString().split('T')[0]);
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSaveRetention = async () => {
+    if (!adminKey) return setMessage('Admin Access Required');
+    setLoading(true);
+    try {
+      await fetchJSON('/api/admin/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ userId: user.id, retentionDays: Number(retention) })
+      });
+      setMessage('Retention updated. Changes apply daily.');
+    } catch (err) { setMessage(err.message); } finally { setLoading(false); }
+  };
+
+  const handleExport = async () => {
+    if (!adminKey) return setMessage('Admin Access Required');
+    setLoading(true);
+    try {
+      const query = `officeId=${selectedOfficeId}&start=${exportStart}&end=${exportEnd}`;
+      const response = await fetch(`${API_BASE}/api/admin/token-history/export?${query}`, {
+        headers: {
+          'Authorization': `Bearer ${sessionStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Export failed');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `token_history_${exportStart}_to_${exportEnd}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setMessage('Export started.');
+    } catch (err) { setMessage(err.message); } finally { setLoading(false); }
+  };
+
+  if (user.role !== 'admin') {
+    return (
+      <div className="panel" style={{ maxWidth: '600px', margin: '40px auto', textAlign: 'center' }}>
+        <h3>Settings</h3>
+        <p>Customer settings are coming soon.</p>
+        <button onClick={onBack}>Back</button>
+      </div>
+    );
+  }
+
   return (
     <div className="panel" style={{ maxWidth: '600px', margin: '40px auto' }}>
       <div className="panel-header">
-        <h3>Settings</h3>
+        <h3>Admin Settings</h3>
         <button className="ghost" onClick={onBack}>Back</button>
       </div>
+
+      {message && <div className="message" style={{ marginBottom: '16px' }}>{message}</div>}
+
       <div className="panel-section">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontWeight: '500', fontSize: '16px' }}>Dark Mode</div>
-            <div className="muted" style={{ fontSize: '14px' }}>Adjust interface theme</div>
-          </div>
-          {/* Placeholder Toggle */}
-          <div style={{ width: '40px', height: '24px', background: 'var(--gray-300)', borderRadius: '12px', position: 'relative', cursor: 'pointer' }}>
-            <div style={{ width: '20px', height: '20px', background: '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: '2px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}></div>
-          </div>
+        <h4>History Retention</h4>
+        <p style={{ fontSize: '14px', color: 'var(--gray-500)', marginBottom: '12px' }}>
+          Automatically delete token history older than the selected period.
+        </p>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <select
+            value={retention}
+            onChange={e => setRetention(e.target.value)}
+            style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', flex: 1 }}
+          >
+            <option value="7">7 Days</option>
+            <option value="14">14 Days</option>
+            <option value="30">30 Days</option>
+          </select>
+          <button onClick={handleSaveRetention} disabled={loading}>Save</button>
         </div>
+      </div>
+
+      <div className="panel-section" style={{ borderTop: '1px solid var(--gray-200)', marginTop: '24px', paddingTop: '24px' }}>
+        <h4>Export Data</h4>
+        <p style={{ fontSize: '14px', color: 'var(--gray-500)', marginBottom: '12px' }}>
+          Download token history as an Excel file.
+        </p>
+        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          <label className="field">
+            <span>From</span>
+            <input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>To</span>
+            <input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} />
+          </label>
+        </div>
+        <button className="secondary-btn" onClick={handleExport} disabled={loading} style={{ width: '100%' }}>
+          {loading ? 'Processing...' : 'Download Excel Report'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const HistoryView = ({ user, onBack, adminKey, selectedOfficeId }) => {
+  const [history, setHistory] = useState([]);
+  const [start, setStart] = useState(new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]);
+  const [end, setEnd] = useState(new Date().toISOString().split('T')[0]);
+  const [status, setStatus] = useState('all');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadHistory();
+  }, [start, end, status]);
+
+  const loadHistory = async () => {
+    if (!adminKey) return;
+    setLoading(true);
+    try {
+      const query = `officeId=${selectedOfficeId}&start=${start}&end=${end}&status=${status}`;
+      const data = await fetchJSON(`/api/admin/token-history?${query}`);
+      setHistory(data.history || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="panel" style={{ maxWidth: '800px', margin: '40px auto' }}>
+      <div className="panel-header">
+        <h3>Token Archives</h3>
+        <button className="ghost" onClick={onBack}>Back</button>
+      </div>
+
+      <div className="field-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        <label className="field">
+          <span>From</span>
+          <input type="date" value={start} onChange={e => setStart(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>To</span>
+          <input type="date" value={end} onChange={e => setEnd(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Status</span>
+          <select value={status} onChange={e => setStatus(e.target.value)}>
+            <option value="all">All</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="no-show">No Show</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="token-list" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+        {loading && <div style={{ padding: '20px', textAlign: 'center', color: 'var(--gray-500)' }}>Loading records...</div>}
+        {!loading && history.length === 0 && (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--gray-500)' }}>No archived records found for this range.</div>
+        )}
+        {history.map(t => (
+          <div key={t.id} className="token-row" style={{ opacity: 0.8 }}>
+            <div>
+              <div className="token-label">#{t.token_number} - {t.user_name}</div>
+              <div className="token-meta">
+                {new Date(t.created_at).toLocaleDateString()} · {t.service_type} · {t.status}
+              </div>
+            </div>
+            <div className="token-actions">
+              <span className="token-chip">{new Date(t.archived_at).toLocaleDateString()}</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1478,6 +1635,31 @@ function App() {
     );
   }
 
+  if (view === 'settings') {
+    return (
+      <>
+        <header className="app-header">
+          <div className="eyebrow">Settings</div>
+          <ProfileMenu user={user} onNavigate={setView} onLogout={logout} />
+        </header>
+        <SettingsView user={user} onBack={() => setView('admin')} adminKey={adminKey} selectedOfficeId={selectedOfficeId} />
+      </>
+    );
+  }
+
+  if (view === 'history') {
+    return (
+      <>
+        <header className="app-header">
+          <div className="eyebrow">Archives</div>
+          <ProfileMenu user={user} onNavigate={setView} onLogout={logout} />
+        </header>
+        <HistoryView user={user} onBack={() => setView('admin')} adminKey={adminKey} selectedOfficeId={selectedOfficeId} />
+      </>
+    );
+  }
+
+  // Admin / Customer Dashboard
   const showHeader = !['login', 'register', 'verify-email', 'forgot-password', 'reset-password'].includes(view);
 
   return (
@@ -1635,7 +1817,7 @@ function App() {
                 {/* Only History remains */}
                 <div className="panel-section">
                   <h4>History</h4>
-                  <button onClick={loadHistory} className="ghost">View Token History</button>
+                  <button onClick={() => setView('history')} className="ghost">View Token History</button>
                 </div>
               </>
             )}
@@ -1670,6 +1852,9 @@ function App() {
                 <div className="panel-header">
                   <h3>{selectedOffice.name}</h3>
                   <div className="stat-group">
+                    {view === 'admin' && (
+                      <button className="ghost small" onClick={() => setView('history')} style={{ marginRight: 'auto' }}>View Archives</button>
+                    )}
                     {view === 'admin' ? (
                       <Stat label="Current Token" value={
                         (selectedOfficeData?.tokens || [])
