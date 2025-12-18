@@ -86,6 +86,10 @@ app.post('/api/auth/verify-otp', (req, res) => {
   const record = emailVerificationsStmt.get.get(email);
   if (!record || record.otp !== otp) return res.status(400).json({ error: 'Invalid OTP' });
   usersStmt.insert.run({ id: uuidv4(), name: 'Verified User', email, hash: 'temp', role: 'customer', created_at: toIso() }); // Stub
+
+  // Email Notification: Welcome
+  sendEmail(email, emailTemplates.welcomeCustomer('Verified User'));
+
   res.json({ success: true });
 });
 
@@ -215,6 +219,23 @@ const recalculateQueue = (officeId) => {
       token.allocation_time = now;
       if (token.user_id) {
         io.to(`user_${token.user_id}`).emit('notification', { message: "You have been allocated! Please proceed to the office." });
+      }
+
+      // Email Notification: Travel Instruction
+      const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : (token.user_id ? usersStmt.getById.get(token.user_id)?.email : null);
+      if (recipientEmail) {
+        const travelStart = now;
+        const arrival = new Date(new Date(now).getTime() + (token.travel_time_minutes || 15) * 60000).toISOString();
+        sendEmail(recipientEmail, emailTemplates.travelInstruction(
+          token.user_name,
+          token.token_number,
+          office.name,
+          office.address || '',
+          office.latitude,
+          office.longitude,
+          travelStart,
+          arrival
+        ));
       }
     });
     // Refresh lists after promotion
@@ -351,6 +372,19 @@ app.post('/api/offices/:id/book', (req, res) => {
       // Do not fail the request if calc fails
     }
 
+    // Email Notification
+    const recipientEmail = (customerContact && customerContact.includes('@')) ? customerContact : (userId ? usersStmt.getById.get(userId)?.email : null);
+
+    if (recipientEmail) {
+      sendEmail(recipientEmail, emailTemplates.bookingConfirmation(
+        token.user_name,
+        token.token_number,
+        office.name,
+        office.address || '', // Schema might not have address
+        token.created_at
+      ));
+    }
+
     res.status(201).json(token);
   } catch (err) {
     console.error('Booking Endpoint Fatal Error:', err);
@@ -429,6 +463,7 @@ app.post('/api/offices/:id/call-next', (req, res) => {
 });
 
 // Complete
+// Complete
 app.post('/api/tokens/:id/complete', (req, res) => {
   const token = tokensStmt.getById.get(req.params.id);
   if (!token) return res.status(404).json({ error: 'Not found' });
@@ -447,8 +482,89 @@ app.post('/api/tokens/:id/complete', (req, res) => {
     });
   })();
 
-  // Recalculate will promote new WAIT -> ALLOCATED
   recalculateQueue(token.office_id);
+
+  // Email Notification: Completed
+  const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : (token.user_id ? usersStmt.getById.get(token.user_id)?.email : null);
+  if (recipientEmail) {
+    const office = officesStmt.getById.get(token.office_id);
+    sendEmail(recipientEmail, emailTemplates.tokenCompleted(
+      token.user_name,
+      token.token_number,
+      office.name
+    ));
+  }
+
+  res.json({ success: true });
+});
+
+// Cancel
+app.post('/api/tokens/:id/cancel', (req, res) => {
+  const token = tokensStmt.getById.get(req.params.id);
+  if (!token) return res.status(404).json({ error: 'Not found' });
+
+  db.transaction(() => {
+    tokensStmt.updateStatus.run({
+      id: token.id,
+      status: 'cancelled',
+      completed_at: toIso(), // Mark as terminal
+      called_at: token.called_at,
+      allocation_time: token.allocation_time,
+      service_start_time: null,
+      expected_completion_time: null,
+      now: toIso(),
+      eta: null
+    });
+  })();
+
+  recalculateQueue(token.office_id);
+
+  // Email Notification: Cancelled
+  const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : (token.user_id ? usersStmt.getById.get(token.user_id)?.email : null);
+  if (recipientEmail) {
+    const office = officesStmt.getById.get(token.office_id);
+    sendEmail(recipientEmail, emailTemplates.tokenCancelled(
+      token.user_name,
+      token.token_number,
+      office.name,
+      'Cancelled by user or admin'
+    ));
+  }
+
+  res.json({ success: true });
+});
+
+// No-Show
+app.post('/api/tokens/:id/no-show', (req, res) => {
+  const token = tokensStmt.getById.get(req.params.id);
+  if (!token) return res.status(404).json({ error: 'Not found' });
+
+  db.transaction(() => {
+    tokensStmt.updateStatus.run({
+      id: token.id,
+      status: 'no-show',
+      completed_at: toIso(),
+      called_at: token.called_at,
+      allocation_time: token.allocation_time,
+      service_start_time: null,
+      expected_completion_time: null,
+      now: toIso(),
+      eta: null
+    });
+  })();
+
+  recalculateQueue(token.office_id);
+
+  // Email Notification: No-Show
+  const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : (token.user_id ? usersStmt.getById.get(token.user_id)?.email : null);
+  if (recipientEmail) {
+    const office = officesStmt.getById.get(token.office_id);
+    sendEmail(recipientEmail, emailTemplates.tokenNoShow(
+      token.user_name,
+      token.token_number,
+      office.name
+    ));
+  }
 
   res.json({ success: true });
 });
