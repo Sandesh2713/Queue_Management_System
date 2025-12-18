@@ -180,6 +180,35 @@ const historyStmt = {
   getByFilter: db.prepare(`SELECT * FROM token_history WHERE office_id = ? AND created_at BETWEEN ? AND ? ORDER BY created_at DESC`),
 };
 
+
+
+/* --- Helpers (Restored) --- */
+const enrichTokens = (tokens) => {
+  const now = Date.now();
+  return tokens.map(t => {
+    let time_state = 'FUTURE';
+    let service_start_time = t.service_start_time;
+
+    if (service_start_time) {
+      const tTime = new Date(service_start_time).getTime();
+      if (tTime < now) {
+        time_state = 'PAST';
+        // HARD GUARANTEE: Do not send past timestamps
+        service_start_time = null;
+      } else if (tTime - now < 60000) {
+        time_state = 'NOW';
+      }
+    }
+
+    // Clear time state for terminal statuses
+    if (['COMPLETED', 'cancelled', 'no-show', 'history'].includes(t.status)) {
+      time_state = null;
+    }
+
+    return { ...t, time_state, service_start_time };
+  });
+};
+
 const recalculateQueue = (officeId) => {
   const office = officesStmt.getById.get(officeId);
   if (!office) return;
@@ -297,7 +326,7 @@ const recalculateQueue = (officeId) => {
   // Emit Global Update
   io.to(`office_${officeId}`).emit('queue_update', {
     officeId,
-    tokens: tokensStmt.getForOffice.all(officeId),
+    tokens: enrichTokens(tokensStmt.getForOffice.all(officeId)),
     stats: {
       wait: waitTokens.length,
       allocated: allocatedTokens.length,
@@ -594,7 +623,12 @@ app.get('/api/offices/:id', (req, res) => {
     const queueCount = tokens.filter(t => t.status === 'WAIT' || t.status === 'queued').length;
     res.json({ office: { ...office, queueCount }, tokens });
   } catch (e) {
-    res.status(404).json({ error: 'Office not found' });
+    console.error('GET /api/offices/:id Error:', e);
+    if (e.message === 'Office not found') {
+      res.status(404).json({ error: 'Office not found' });
+    } else {
+      res.status(500).json({ error: 'Internal Server Error: ' + e.message });
+    }
   }
 });
 

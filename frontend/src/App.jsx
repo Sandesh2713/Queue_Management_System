@@ -1554,6 +1554,7 @@ function App() {
   };
 
   const fetchOfficeDetail = async (id) => {
+    if (!id || id === 'undefined' || id === 'null') return;
     try {
       setLoading(true);
       const data = await fetchJSON(`/api/offices/${id}`);
