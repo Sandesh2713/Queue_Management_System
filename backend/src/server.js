@@ -100,6 +100,20 @@ app.use(morgan('dev'));
 
 const toIso = () => new Date().toISOString();
 
+// Middleware: Authenticate Token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'No token' });
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
+};
+
 /* --- Database Statements --- */
 const officesStmt = {
   getById: db.prepare(`SELECT * FROM offices WHERE id = ?`),
@@ -372,42 +386,50 @@ app.get('/health', (req, res) => res.json({ status: 'ok', time: toIso() }));
 
 // Create Token (Book)
 app.post('/api/offices/:id/book', (req, res) => {
-  const { id } = req.params;
-  const office = ensureOffice(id);
-  const { customerName, customerContact, lat, lng, userId, serviceType } = req.body;
+  try {
+    const { id } = req.params;
+    const office = ensureOffice(id);
+    const { customerName, customerContact, lat, lng, userId, serviceType } = req.body;
 
-  if (!customerName) return res.status(400).json({ error: 'Name required' });
+    if (!customerName) return res.status(400).json({ error: 'Name required' });
 
-  // Calc Travel Time
-  let travelTime = 15; // default
-  if (lat && lng && office.latitude && office.longitude) {
-    const dist = haversineDistance(lat, lng, office.latitude, office.longitude);
-    travelTime = Math.ceil(dist * 2); // Assume 30km/h -> 2 min per km? Or 1 min per km (60kmh)?
-    // User requested: "Travel Time (Haversine distance)" - implies logic.
-    // Let's assume 30km/h avg city speed: 1km = 2 mins.
+    // Calc Travel Time
+    let travelTime = 15; // default
+    if (lat && lng && office.latitude && office.longitude) {
+      const dist = haversineDistance(lat, lng, office.latitude, office.longitude);
+      travelTime = Math.ceil(dist * 2);
+    }
+
+    const token = {
+      id: uuidv4(),
+      office_id: id,
+      user_id: userId || null, // Ensure valid value
+      user_name: customerName,
+      user_contact: customerContact,
+      token_number: (tokensStmt.getMaxTokenNum.get(id).maxNum || 0) + 1,
+      created_at: toIso(),
+      lat: lat || null,
+      lng: lng || null,
+      travel_time_minutes: travelTime,
+      service_type: serviceType || 'General'
+    };
+
+    db.transaction(() => {
+      tokensStmt.insert.run(token);
+    })();
+
+    try {
+      recalculateQueue(id);
+    } catch (calcErr) {
+      console.error('Recalculate Queue Failed (Non-fatal):', calcErr);
+      // Do not fail the request if calc fails
+    }
+
+    res.status(201).json(token);
+  } catch (err) {
+    console.error('Booking Endpoint Fatal Error:', err);
+    res.status(500).json({ error: 'System Error: ' + String(err.message) });
   }
-
-  const token = {
-    id: uuidv4(),
-    office_id: id,
-    user_id: userId || null,
-    user_name: customerName,
-    user_contact: customerContact,
-    token_number: (tokensStmt.getMaxTokenNum.get(id).maxNum || 0) + 1,
-    created_at: toIso(),
-    lat: lat || null,
-    lng: lng || null,
-    travel_time_minutes: travelTime,
-    service_type: serviceType || 'General'
-  };
-
-  db.transaction(() => {
-    tokensStmt.insert.run(token);
-  })();
-
-  recalculateQueue(id);
-
-  res.status(201).json(token);
 });
 
 // Call Next
@@ -686,22 +708,6 @@ app.post('/api/offices', (req, res) => {
 });
 
 
-// Middleware: Authenticate Token
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'No token' });
-  const token = authHeader.split(' ')[1];
-  try {
-    const decoded = jwt.verify(token, jwtSecret);
-    // Fetch full user to check role/retention? decoded has role. 
-    // Let's attach minimal info or fetch full if needed.
-    // decoding is faster.
-    req.user = decoded;
-    next();
-  } catch (err) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-};
 
 // Update Retention Settings
 app.put('/api/admin/settings', authenticateToken, (req, res) => {
