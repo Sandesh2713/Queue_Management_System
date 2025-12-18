@@ -12,6 +12,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const ExcelJS = require('exceljs');
+const emailTemplates = require('./email_templates');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -53,10 +54,17 @@ const transporter = nodemailer.createTransport({
   auth: { user: smtpUser, pass: smtpPass },
 });
 
-const sendEmail = async (to, subject, text) => {
+const sendEmail = async (to, subject, content) => {
   if (!smtpUser || !smtpPass) return console.log('Mock Email:', { to, subject });
   try {
-    await transporter.sendMail({ from: `"Queue System" <${smtpUser}>`, to, subject, text });
+    const isHtml = typeof content === 'string' && content.trim().startsWith('<');
+    const mailOptions = {
+      from: `"GetEzi Team" <${smtpUser}>`,
+      to,
+      subject,
+      [isHtml ? 'html' : 'text']: content
+    };
+    await transporter.sendMail(mailOptions);
   } catch (err) {
     console.error('Error sending email:', err);
   }
@@ -156,6 +164,8 @@ const tokensStmt = {
     WHERE id = @id
   `),
   getMaxTokenNum: db.prepare(`SELECT COALESCE(MAX(token_number), 0) as maxNum FROM tokens WHERE office_id = ?`),
+  markArrived: db.prepare(`UPDATE tokens SET presence_status = 'ARRIVED', arrival_confirmed_at = @now WHERE id = @id`),
+  updateEligibility: db.prepare(`UPDATE tokens SET eligibility_time = @time WHERE id = @id`),
 };
 
 const usersStmt = {
@@ -225,6 +235,56 @@ const recalculateQueue = (officeId) => {
   const calledTokens = activeTokens.filter(t => t.status === 'CALLED');
   let allocatedTokens = activeTokens.filter(t => t.status === 'ALLOCATED');
   let waitTokens = activeTokens.filter(t => t.status === 'WAIT');
+
+  // --- 1.5 Grace Period Logic (Auto No-Show) ---
+  if (allocatedTokens.length > 0) {
+    // Only enforced on the very first token to prevent blocking? 
+    // Or strictly all allocated tokens have a timer?
+    // Prompt: "When a token becomes eligible to be called" -> Allocation Time.
+    // We check ALL allocated tokens that are NOT_ARRIVED.
+    allocatedTokens.forEach((token, idx) => {
+      if (token.presence_status !== 'ARRIVED') {
+        const nowMs = Date.now();
+        if (!token.eligibility_time) {
+          // First time seen as allocated/eligible? 
+          // Ideally set when status becomes ALLOCATED.
+          // Backfill if missing (migration safety).
+          tokensStmt.updateEligibility.run({ id: token.id, time: toIso() });
+          token.eligibility_time = toIso();
+        }
+
+        const elgTime = new Date(token.eligibility_time).getTime();
+        const GRACE_PERIOD_MS = 5 * 60 * 1000; // 5 mins
+
+        if (nowMs - elgTime > GRACE_PERIOD_MS) {
+          // Mark No-Show
+          console.log(`Auto No-Show for Token ${token.token_number}`);
+          tokensStmt.updateStatus.run({
+            id: token.id,
+            status: 'no-show', // Make sure this matches status check elsewhere ('no-show' vs 'cancelled')
+            allocation_time: token.allocation_time,
+            service_start_time: null,
+            expected_completion_time: null,
+            called_at: null,
+            completed_at: toIso(),
+            now: toIso(),
+            eta: null
+          });
+          // Notify
+          const office = officesStmt.getById.get(officeId);
+          const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : token.user_email;
+          if (recipientEmail) {
+            sendEmail(recipientEmail, emailTemplates.tokenNoShow(token.user_name, token.token_number, office.name));
+          }
+          // Since we modified list in-place via DB, we should probably restart recalculate or accept slight staleness until next run?
+          // We mark it, next run cleans it up.
+        }
+      }
+    });
+    // Re-fetch after potential no-shows? 
+    // recalculateQueue calls itself recursively? No, infinite loop danger.
+    // We proceed. no-show tokens are filtered out next time.
+  }
 
   let currentOccupancy = calledTokens.length + allocatedTokens.length;
   let slotsOpen = M - currentOccupancy;
@@ -465,6 +525,15 @@ app.post('/api/offices/:id/call-next', (req, res) => {
     }
   }
 
+  // Guard: Presence Check
+  if (nextToken.presence_status !== 'ARRIVED') {
+    return res.status(400).json({
+      error: 'Customer has not confirmed arrival yet.',
+      code: 'NOT_ARRIVED',
+      token: nextToken
+    });
+  }
+
   const now = toIso();
 
   db.transaction(() => {
@@ -594,6 +663,20 @@ app.post('/api/tokens/:id/no-show', (req, res) => {
       office.name
     ));
   }
+
+  res.json({ success: true });
+});
+
+// Arrive
+app.post('/api/tokens/:id/arrive', (req, res) => {
+  const token = tokensStmt.getById.get(req.params.id);
+  if (!token) return res.status(404).json({ error: 'Not found' });
+
+  db.transaction(() => {
+    tokensStmt.markArrived.run({ id: token.id, now: toIso() });
+  })();
+
+  recalculateQueue(token.office_id);
 
   res.json({ success: true });
 });

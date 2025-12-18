@@ -81,10 +81,11 @@ function Stat({ label, value }) {
   );
 }
 
-function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, currentUser, office }) {
+function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, onArrive, isAdmin, currentUser, office }) {
   const isOwner = currentUser?.id === token.user_id;
   const isTerminal = ['cancelled', 'completed', 'no-show'].includes(token.status);
   const isHolding = token.status === 'holding';
+  const isArrived = token.presence_status === 'ARRIVED';
 
   // Constants
   const N = office?.counter_count || 1;
@@ -102,10 +103,15 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, c
     subMsg = office.pause_message || `Service paused: ${office.pause_reason}`;
   } else if (token.status === 'CALLED') {
     statusMsg = 'At Counter';
-    subMsg = 'Please proceed to the counter.';
+    subMsg = 'Proceed to the counter.';
   } else if (token.status === 'ALLOCATED') {
-    statusMsg = 'In Office Waiting Area';
-    subMsg = 'Please wait, your turn will be called shortly.';
+    if (isArrived) {
+      statusMsg = 'You are checked in';
+      subMsg = 'Please wait, your turn will be called shortly.';
+    } else {
+      statusMsg = 'Arrival Confirmation Needed';
+      subMsg = 'You are allowed to enter the office. Please confirm arrival.';
+    }
   } else if (token.status === 'WAIT') {
     // SCENARIO 4 (Extended Wait / Remote)
     if (token.time_state === 'PAST' || !token.service_start_time) {
@@ -148,8 +154,19 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, c
 
   return (
     <div className={`token-row ${token.status}`}>
-      <div>
-        <div className="token-label">Token #{token.token_number}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="token-label">Token #{token.token_number}</div>
+          {isAdmin && (
+            <span style={{
+              fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold',
+              backgroundColor: isArrived ? '#dcfce7' : '#f3f4f6',
+              color: isArrived ? '#166534' : '#6b7280'
+            }}>
+              {isArrived ? 'ARRIVED' : 'NOT ARRIVED'}
+            </span>
+          )}
+        </div>
         <div className="token-meta">
           {token.user_name}
           <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginTop: '4px' }}>{statusMsg}</div>
@@ -157,6 +174,13 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, c
         </div>
       </div>
       <div className="token-actions">
+        {/* Customer Arrive Button */}
+        {token.status === 'ALLOCATED' && !isArrived && isOwner && (
+          <button className="primary-btn small" onClick={() => onArrive(token.id)} style={{ padding: '6px 12px' }}>
+            I've Arrived
+          </button>
+        )}
+
         {!isTerminal && !isHolding && (
           <>
             {isAdmin && (
@@ -2092,7 +2116,7 @@ function App() {
                         return false;
                       })
                       .map(t => (
-                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} isAdmin={view === 'admin'} currentUser={user} office={selectedOffice} onSelect={setSelectedToken} />
+                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} onArrive={id => updateToken(id, 'arrive')} isAdmin={view === 'admin'} currentUser={user} office={selectedOffice} onSelect={setSelectedToken} />
                       ))}
                     {selectedToken && (
                       <TokenDetailsModal token={selectedToken} office={selectedOffice} onClose={() => setSelectedToken(null)} onAction={updateToken} />
