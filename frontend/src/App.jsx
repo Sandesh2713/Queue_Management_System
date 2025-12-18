@@ -74,9 +74,10 @@ function Stat({ label, value }) {
   );
 }
 
-function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser }) {
+function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, currentUser }) {
   const isOwner = currentUser?.id === token.user_id;
-  const isTerminal = ['cancelled', 'completed', 'no-show'].includes(token.status);
+  const isTerminal = ['cancelled', 'completed'].includes(token.status);
+  const isHolding = token.status === 'holding';
 
   return (
     <div className="token-row">
@@ -89,8 +90,8 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser 
         </div>
       </div>
       <div className="token-actions">
-        <span className="token-chip">{token.status}</span>
-        {!isTerminal && (
+        <span className={`token-chip ${token.status}`}>{token.status}</span>
+        {!isTerminal && !isHolding && (
           <>
             {isAdmin && (
               <>
@@ -102,6 +103,9 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, isAdmin, currentUser 
               <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
             )}
           </>
+        )}
+        {isHolding && isAdmin && (
+          <button className="ghost" onClick={() => onReQueue(token.id)}>Re-Queue</button>
         )}
       </div>
     </div>
@@ -1190,6 +1194,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [adminKey, setAdminKey] = useState('');
+  const [showAdminKey, setShowAdminKey] = useState(false);
 
   // Auto-dismiss message after 15 seconds
   useEffect(() => {
@@ -1370,10 +1375,25 @@ function App() {
       const verbs = {
         'cancel': 'cancelled',
         'complete': 'completed',
-        'no-show': 'marked as no-show'
+        'no-show': 'marked as no-show',
+        're-queue': 're-queued'
       };
 
       setMessage(`Token ${verbs[action] || action}`);
+      fetchOfficeDetail(selectedOfficeId);
+    } catch (err) { setMessage(err.message); }
+  };
+
+  const handlePauseToggle = async () => {
+    if (!adminKey) return setMessage('Admin key required');
+    try {
+      const newStatus = !selectedOffice.is_paused;
+      await fetchJSON(`/api/offices/${selectedOfficeId}/pause`, {
+        method: 'POST',
+        headers: { 'x-admin-key': adminKey },
+        body: JSON.stringify({ paused: newStatus })
+      });
+      setMessage(newStatus ? 'Queue Paused' : 'Queue Resumed');
       fetchOfficeDetail(selectedOfficeId);
     } catch (err) { setMessage(err.message); }
   };
@@ -1592,12 +1612,15 @@ function App() {
                       } />
                     ) : (
                       <Stat label="Wait" value={
-                        (selectedOffice.queueCount * selectedOffice.avg_service_minutes) > 0
-                          ? `${selectedOffice.queueCount * selectedOffice.avg_service_minutes}m`
+                        (selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes)) > 0
+                          ? `${Math.round(selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes))}m`
                           : 'Access Allowed'
                       } />
                     )}
                     <Stat label="Avail" value={selectedOffice.available_today} />
+                    {view === 'admin' && (
+                      <Stat label="Velocity" value={`${Number(selectedOffice.average_velocity || 5).toFixed(1)}m`} />
+                    )}
                   </div>
                 </div>
 
@@ -1605,7 +1628,7 @@ function App() {
                   <section className="panel-section">
                     <h4>Book Slot</h4>
                     <p style={{ fontSize: '14px', color: 'var(--gray-500)' }}>
-                      {selectedOffice.available_today > 0 ? 'Slots available immediately.' : `Current wait: approx ${selectedOffice.queueCount * selectedOffice.avg_service_minutes} mins.`}
+                      {selectedOffice.available_today > 0 ? 'Slots available immediately.' : `Current wait: approx ${Math.round(selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes))} mins.`}
                     </p>
                     <button onClick={() => setIsBookingModalOpen(true)}>Book Now</button>
                   </section>
@@ -1622,13 +1645,48 @@ function App() {
                 {view === 'admin' && (
                   <section className="panel-section">
                     <h4>Admin Controls</h4>
-                    <div className="field-grid">
-                      <label>Availability<input type="number" value={availabilityInput} onChange={e => setAvailabilityInput(e.target.value)} /></label>
-                      <label>Key<input value={adminKey} onChange={e => setAdminKey(e.target.value)} /></label>
-                    </div>
-                    <div className="button-row">
-                      <button onClick={handleAvailabilityUpdate}>Update</button>
-                      <button onClick={callNext}>Call Next</button>
+                    <div className="admin-controls-grid">
+                      <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: 0 }}>
+                        <label className="field">
+                          <span>Availability</span>
+                          <input type="number" value={availabilityInput} onChange={e => setAvailabilityInput(e.target.value)} />
+                        </label>
+                        <label className="field" style={{ position: 'relative' }}>
+                          <span>Admin Key</span>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type={showAdminKey ? 'text' : 'password'}
+                              value={adminKey}
+                              onChange={e => setAdminKey(e.target.value)}
+                              placeholder="••••"
+                              style={{ paddingRight: '40px' }}
+                            />
+                            <button
+                              className="ghost"
+                              onClick={() => setShowAdminKey(!showAdminKey)}
+                              style={{
+                                position: 'absolute',
+                                right: '4px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                padding: '4px 8px',
+                                height: 'auto',
+                                minWidth: 'auto',
+                                color: 'var(--gray-500)'
+                              }}
+                            >
+                              {showAdminKey ? 'Hide' : 'Show'}
+                            </button>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="button-group">
+                        <button onClick={handleAvailabilityUpdate} className="secondary-btn" style={{ background: 'var(--gray-200)', color: 'var(--gray-900)' }}>Update</button>
+                        <button onClick={callNext} disabled={selectedOffice.is_paused} className="primary-btn">Call Next</button>
+                        <button onClick={handlePauseToggle} className={selectedOffice.is_paused ? 'ghost danger' : 'ghost'} style={{ border: '1px solid currentColor' }}>
+                          {selectedOffice.is_paused ? 'Resume' : 'Pause'}
+                        </button>
+                      </div>
                     </div>
                   </section>
                 )}
@@ -1663,7 +1721,7 @@ function App() {
                         return ['completed', 'cancelled', 'no-show'].includes(t.status);
                       })
                       .map(t => (
-                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} isAdmin={view === 'admin'} currentUser={user} />
+                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} isAdmin={view === 'admin'} currentUser={user} />
                       ))}
                     {view === 'customer' && (selectedOfficeData?.tokens || []).filter(t => {
                       const isMine = t.user_id === user?.id;

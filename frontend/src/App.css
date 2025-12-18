@@ -854,3 +854,28 @@ button.ghost.danger:hover {
     transform: translateY(0);
   }
 }
+/* Admin Controls Specifics */
+.admin-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: end;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.button-group button {
+  flex: 1;
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.panel-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gray-900);
+}

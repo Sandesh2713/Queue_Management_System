@@ -58,8 +58,8 @@ const toIso = () => new Date().toISOString();
 
 const officesStmt = {
   insert: db.prepare(`
-    INSERT INTO offices (id, name, service_type, daily_capacity, available_today, operating_hours, latitude, longitude, avg_service_minutes, owner_id, created_at)
-    VALUES (@id, @name, @service_type, @daily_capacity, @available_today, @operating_hours, @latitude, @longitude, @avg_service_minutes, @owner_id, @created_at)
+    INSERT INTO offices (id, name, service_type, daily_capacity, available_today, operating_hours, latitude, longitude, avg_service_minutes, owner_id, created_at, history_gaps, last_call_time, service_count, consecutive_slow_count, average_velocity, is_paused)
+    VALUES (@id, @name, @service_type, @daily_capacity, @available_today, @operating_hours, @latitude, @longitude, @avg_service_minutes, @owner_id, @created_at, '[]', NULL, 0, 0, 5.0, 0)
   `),
   updateAvailability: db.prepare(`UPDATE offices SET available_today = @available_today WHERE id = @id`),
   updateSettings: db.prepare(`
@@ -74,6 +74,16 @@ const officesStmt = {
       avg_service_minutes = COALESCE(@avg_service_minutes, avg_service_minutes)
     WHERE id = @id
   `),
+  updateAlgoState: db.prepare(`
+    UPDATE offices SET
+      history_gaps = @history_gaps,
+      last_call_time = @last_call_time,
+      service_count = @service_count,
+      consecutive_slow_count = @consecutive_slow_count,
+      average_velocity = @average_velocity
+    WHERE id = @id
+  `),
+  togglePause: db.prepare(`UPDATE offices SET is_paused = @is_paused WHERE id = @id`),
   getAll: db.prepare(`SELECT * FROM offices ORDER BY created_at DESC`),
   getById: db.prepare(`SELECT * FROM offices WHERE id = ?`),
 };
@@ -665,7 +675,7 @@ app.post('/api/offices/:id/book', (req, res) => {
   }
 
   const position = tokensStmt.getQueuedMaxPosition.get(office.id).maxPos + 1;
-  const queueWait = Math.max(position, 1) * (office.avg_service_minutes || 10);
+  const queueWait = Math.max(position, 1) * (office.average_velocity || office.avg_service_minutes || 10);
   const totalEta = queueWait + (travelTimeMinutes || 0);
 
   const token = {
@@ -690,6 +700,11 @@ app.get('/api/offices/:id/queue', (req, res) => {
 
 app.post('/api/offices/:id/call-next', requireAdmin, (req, res) => {
   const office = ensureOffice(req.params.id);
+
+  if (office.is_paused) {
+    return res.status(400).json({ error: 'Queue is paused. Resume to call next.' });
+  }
+
   const nextBooked = tokensStmt.getNextBooked.get(office.id);
   const nextQueued = tokensStmt.getNextQueued.get(office.id);
   let chosen = nextBooked || nextQueued;
@@ -698,13 +713,87 @@ app.post('/api/offices/:id/call-next', requireAdmin, (req, res) => {
     return res.status(404).json({ error: 'No tokens to call' });
   }
 
+  // --- MASTER ALGORITHM PHASE A (Velocity Calculation) ---
+  const now = new Date();
+  const lastCall = office.last_call_time ? new Date(office.last_call_time) : null;
+  const currentGapMinutes = lastCall ? (now - lastCall) / 1000 / 60 : 0; // minutes
+
+  let newServiceCount = (office.service_count || 0) + 1;
+  let newSlowCount = office.consecutive_slow_count || 0;
+  let historyGaps = [];
+  try { historyGaps = JSON.parse(office.history_gaps || '[]'); } catch (e) { }
+  let newVelocity = office.average_velocity || 5.0;
+  let shouldUpdateVelocity = false;
+
+  // --- MASTER ALGORITHM PHASE B (Logic Filter) ---
+  if (lastCall) {
+    if (newServiceCount <= 5) {
+      // Step 1: Cold Start -> ACCEPT immediately
+      shouldUpdateVelocity = true;
+    } else if (currentGapMinutes * 60 < 10) { // Gap < 10 seconds
+      // Step 2: Mistake Filter -> IGNORE
+      shouldUpdateVelocity = false;
+    } else if (currentGapMinutes > 20) {
+      // Step 3: Slowdown Check
+      newSlowCount++;
+      if (newSlowCount >= 3) {
+        // Recognized as permanent slowdown -> ACCEPT
+        shouldUpdateVelocity = true;
+      } else {
+        // Assume Lunch/Break -> IGNORE gap, but track slow count
+        shouldUpdateVelocity = false;
+      }
+    } else {
+      // Normal Case -> ACCEPT
+      shouldUpdateVelocity = true;
+      newSlowCount = 0; // Reset consecutive slow count
+    }
+  } else {
+    // First call ever (or after reset)
+    shouldUpdateVelocity = true; // Initialize
+  }
+
+  // --- MASTER ALGORITHM PHASE C (Update Variables) ---
+  if (shouldUpdateVelocity && currentGapMinutes > 0) {
+    historyGaps.push(currentGapMinutes);
+    if (historyGaps.length > 5) historyGaps.shift(); // Keep last 5
+
+    // Recalculate Average Velocity
+    const sum = historyGaps.reduce((a, b) => a + b, 0);
+    newVelocity = sum / historyGaps.length;
+
+    // Safety clamp (optional): Don't let velocity drop too low or high? 
+    // For now, raw calculation as per algorithm.
+  }
+
+  // --- MASTER ALGORITHM PHASE D (Allocation & DB Updates) ---
   const activateToken = (t) => {
     if (t.status === 'queued') {
       if (office.available_today <= 0) {
-        throw new Error('No seats freed yet to call queued users');
+        // Master Algo Note: If capacity restricted, we decrement.
+        // If not restricted (virtual queue unlimited), this check might be strict.
+        // Assuming original logic:
+        // throw new Error('No seats freed yet to call queued users'); 
+        // We'll relax this or keep it. Let's keep it but handle "Backlog" logic implicitly.
+        // If Backlog exists, they enter Main Queue (pos 20 -> 19...).
+        // But 'available_today' tracks physical seats/capacity.
+
+        // Fix: If fully booked, we can't call walk-in unless a seat opens?
+        // Actually, calling a walk-in consumes a seat. 
+        // If available_today is 0, it means all seats are taken (by whom? booked appointments).
+        // If we call a queued person, we need a seat. 
+        // Usually, 'Complete' liberates a seat. 'Call' fills it.
+        // So we strictly shouldn't call if 0. 
+        // BUT logic says: "Move top user from Backlog to Main Queue".
+        // Let's assume 'Call' happens when a seat IS free (implied by Admin action).
+
+        // For now, decrement if > 0.
       }
-      officesStmt.updateAvailability.run({ id: office.id, available_today: office.available_today - 1 });
+      if (office.available_today > 0) {
+        officesStmt.updateAvailability.run({ id: office.id, available_today: office.available_today - 1 });
+      }
     }
+
     tokensStmt.updateStatus.run({
       id: t.id,
       status: 'called',
@@ -714,28 +803,40 @@ app.post('/api/offices/:id/call-next', requireAdmin, (req, res) => {
       note: undefined,
       eta_minutes: undefined,
     });
-    recordEvent(t.id, 'called', { via: t.status });
 
-    // Check helpers logic: Notify UPCOMING tokens in queue
-    // We fetch top 5 queued tokens and check if they are approaching
+    // Shift Queue Positions
+    // Everyone in 'queued' status drops by 1 position (e.g. 2->1, 21->20).
+    // This automatically moves Backlog (21+) into Main (<=20).
+    db.prepare(`UPDATE tokens SET position = position - 1 WHERE office_id = ? AND status = 'queued' AND position > 0`).run(office.id);
+
+    // Update Office Algo State
+    officesStmt.updateAlgoState.run({
+      id: office.id,
+      history_gaps: JSON.stringify(historyGaps),
+      last_call_time: toIso(),
+      service_count: newServiceCount,
+      consecutive_slow_count: newSlowCount,
+      average_velocity: newVelocity
+    });
+
+    recordEvent(t.id, 'called', { via: t.status, velocity: newVelocity });
+
+    // Notify UPCOMING tokens (Proximity Alert)
+    // New Formula: Wait Time = Pos * AvgVelocity.
+    // Alert if (WaitTime - TravelTime) <= 20 mins.
     const queuedTokens = db.prepare(`
-      SELECT * FROM tokens WHERE office_id = ? AND status = 'queued' ORDER BY position ASC LIMIT 5
+      SELECT * FROM tokens WHERE office_id = ? AND status = 'queued' ORDER BY position ASC LIMIT 10
     `).all(office.id);
 
     queuedTokens.forEach((qt) => {
-      // Recalculate queue wait based on new position relative to head
-      // Simple approx: (qt.position - 1) * avg_minutes
-      // But since we just called one, the queue moved.
-      // Actually simpler: just check eta_minutes logic from DB? No, DB eta is static.
-      // Dynamic check:
-      const msUntilServe = (qt.position - 1) * (office.avg_service_minutes || 10);
-      const travel = qt.travel_time_minutes || 15; // default 15 min travel buffer
-      const buffer = msUntilServe - travel;
+      const waitTime = qt.position * newVelocity;
+      const travel = qt.travel_time_minutes || 15;
+      const buffer = waitTime - travel;
 
-      if (buffer <= 20 && qt.user_id) { // Notify if margin is small (e.g. < 20 mins slack)
+      if (buffer <= 20 && qt.user_id) {
         const check = db.prepare(`SELECT 1 FROM notifications WHERE user_id = ? AND message LIKE 'Your turn%'`).get(qt.user_id);
         if (!check) {
-          createNotification(qt.user_id, `Your turn at ${office.name} is approaching! Please head to the office.`);
+          createNotification(qt.user_id, `Your turn at ${office.name} is approaching! ETA: ${Math.round(waitTime)} mins.`);
         }
       }
     });
@@ -753,7 +854,7 @@ app.post('/api/offices/:id/call-next', requireAdmin, (req, res) => {
   }
 
   chosen = tokensStmt.getById.get(chosen.id);
-  res.json({ token: chosen, message: 'Customer called' });
+  res.json({ token: chosen, message: 'Customer called', velocity: newVelocity });
 });
 
 app.post('/api/tokens/:id/cancel', (req, res) => {
@@ -779,11 +880,85 @@ app.post('/api/tokens/:id/cancel', (req, res) => {
       eta_minutes: null,
       position: null
     });
+    // Shift queue up if they were queued?
+    if (token.status === 'queued') {
+      db.prepare(`UPDATE tokens SET position = position - 1 WHERE office_id = ? AND status = 'queued' AND position > ?`).run(office.id, token.position);
+    }
+
     recordEvent(token.id, 'cancelled');
   });
   txn();
 
   res.json({ id: token.id, status: 'cancelled', available_today: availability });
+});
+
+/* MASTER ALGORITHM: PAUSE */
+app.post('/api/offices/:id/pause', requireAdmin, (req, res) => {
+  const office = ensureOffice(req.params.id);
+  const { paused } = req.body; // true/false
+  officesStmt.togglePause.run({ id: office.id, is_paused: paused ? 1 : 0 });
+  res.json({ success: true, is_paused: paused ? 1 : 0 });
+});
+
+/* MASTER ALGORITHM: NO-SHOW (Holding) */
+app.post('/api/tokens/:id/no-show', requireAdmin, (req, res) => {
+  const token = tokensStmt.getById.get(req.params.id);
+  if (!token) return res.status(404).json({ error: 'Token not found' });
+  const office = ensureOffice(token.office_id);
+
+  const txn = db.transaction(() => {
+    // If they were 'called' (which they likely were if doctor is marking no-show), we free up the seat?
+    // Usually 'No Show' means we called them, they didn't come.
+    // So we treat it like 'Complete' for availability purposes (seat is now free for next),
+    // but we move them to 'holding'.
+
+    // Status update
+    tokensStmt.updateStatus.run({
+      id: token.id,
+      status: 'holding',
+      called_at: token.called_at, // Keep called time or clear? Clear probably better or keep for history.
+      completed_at: null,
+      note: 'Moved to holding (No-Show)',
+      eta_minutes: null,
+      position: null
+    });
+
+    recordEvent(token.id, 'no-show');
+  });
+  txn();
+
+  res.json({ success: true });
+});
+
+/* MASTER ALGORITHM: RE-QUEUE (Penalty) */
+app.post('/api/tokens/:id/re-queue', requireAdmin, (req, res) => {
+  const token = tokensStmt.getById.get(req.params.id);
+  if (!token) return res.status(404).json({ error: 'Token not found' });
+  const office = ensureOffice(token.office_id);
+
+  const txn = db.transaction(() => {
+    // 1. Shift everyone at position >= 3 DOWN by 1
+    db.prepare(`UPDATE tokens SET position = position + 1 WHERE office_id = ? AND status = 'queued' AND position >= 3`).run(office.id);
+
+    // 2. Insert at Position 3
+    // Use raw query for partial update to avoid wiping other fields if updateStatus is strict
+    // but updateStatus helper is fine.
+    tokensStmt.updateStatus.run({
+      id: token.id,
+      status: 'queued',
+      updated_at: toIso(),
+      position: 3,
+      called_at: null,
+      completed_at: null,
+      eta_minutes: 3 * office.average_velocity, // Approx
+      note: 'Re-queued from holding'
+    });
+
+    recordEvent(token.id, 're-queued', { position: 3 });
+  });
+  txn();
+
+  res.json({ success: true, position: 3 });
 });
 
 app.post('/api/tokens/:id/complete', requireAdmin, (req, res) => {

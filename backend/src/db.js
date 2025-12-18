@@ -24,7 +24,13 @@ CREATE TABLE IF NOT EXISTS offices (
   longitude REAL,
   avg_service_minutes INTEGER DEFAULT 10,
   owner_id TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  history_gaps TEXT DEFAULT '[]',
+  last_call_time TEXT,
+  service_count INTEGER DEFAULT 0,
+  consecutive_slow_count INTEGER DEFAULT 0,
+  average_velocity REAL DEFAULT 5.0,
+  is_paused INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS users (
