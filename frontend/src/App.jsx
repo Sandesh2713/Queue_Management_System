@@ -86,7 +86,9 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, c
         <div className="token-meta">
           {token.user_name} · {token.status}
           {token.position ? ` · pos ${token.position}` : ''}
-
+          {token.status === 'called' && token.called_at && (
+            ` · Called at ${new Date(token.called_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          )}
         </div>
       </div>
       <div className="token-actions">
