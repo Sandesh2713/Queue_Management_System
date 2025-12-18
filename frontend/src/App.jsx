@@ -81,31 +81,70 @@ function Stat({ label, value }) {
   );
 }
 
-function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, currentUser }) {
+function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, currentUser, office }) {
   const isOwner = currentUser?.id === token.user_id;
-  const isTerminal = ['cancelled', 'completed'].includes(token.status);
+  const isTerminal = ['cancelled', 'completed', 'no-show'].includes(token.status);
   const isHolding = token.status === 'holding';
+
+  // Constants
+  const N = office?.counter_count || 1;
+  const serviceMinutes = office?.avg_service_minutes || 10;
 
   let statusMsg = token.status;
   let subMsg = '';
 
-  if (token.status === 'WAIT') {
-    statusMsg = 'Wait at Location';
-    subMsg = token.eta ? `ETA: ~${Math.round(token.eta)} mins` : 'Calculating...';
-  } else if (token.status === 'ALLOCATED') {
-    statusMsg = 'Go to Office';
-    // Calculate Target Arrival
-    if (token.allocation_time) {
-      const allocTime = new Date(token.allocation_time).getTime();
-      const travel = (token.travel_time_minutes || 15) * 60000;
-      const target = new Date(allocTime + travel);
-      subMsg = `Reach by ${target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    } else {
-      subMsg = 'Proceed now';
-    }
-  } else if (token.status === 'CALLED') {
+  // Format Helper
+  const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // --- Strict Customer Display Logic ---
+  if (token.status === 'CALLED') {
+    // SCENARIO 1 (subset): Actually at counter
     statusMsg = 'At Counter';
-    subMsg = 'It\'s your turn!';
+    subMsg = 'Please proceed to the counter';
+  } else if (token.status === 'ALLOCATED') {
+    // SCENARIO 1 or 2/3 depending on eta
+    if (!token.eta || token.eta <= 0) {
+      // BATCH 1 (Direct Access)
+      statusMsg = 'You are Next';
+      subMsg = 'Please proceed to the counter';
+    } else {
+      // BATCH 2 & 3 (Waiting for counter)
+      statusMsg = 'In Office Queue';
+      const callTime = token.service_start_time ? fmtTime(token.service_start_time) : 'Short wait...';
+      subMsg = `Estimated time to be called: ${callTime}`;
+    }
+  } else if (token.status === 'WAIT') {
+    // SCENARIO 4 (Extended Wait / Remote)
+    statusMsg = 'Wait at Location';
+
+    // Logic: Allocation Time = Call Time - (3 * ServiceTime)
+    // Travel Start = Allocation Time - Travel Time
+
+    const callTimeMs = token.service_start_time ? new Date(token.service_start_time).getTime() : Date.now();
+    const allocOffset = 3 * serviceMinutes * 60000;
+    const travelOffset = (token.travel_time_minutes || 15) * 60000;
+
+    // Heuristic: Ensure allocation time is roughly correct even if logic shifted
+    let allocTimeMs = callTimeMs - allocOffset;
+    if (allocTimeMs < Date.now()) allocTimeMs = Date.now(); // Clamp
+
+    const travelStartMs = allocTimeMs - travelOffset;
+
+    const allocStr = fmtTime(new Date(allocTimeMs));
+    const travelStr = fmtTime(new Date(travelStartMs));
+
+    subMsg = (
+      <div style={{ lineHeight: '1.4' }}>
+        <div>You will be called to the office at <strong>{allocStr}</strong></div>
+        <div style={{ color: '#d93025' }}>Please start traveling at <strong>{travelStr}</strong></div>
+      </div>
+    );
+  } else if (token.status === 'COMPLETED') {
+    statusMsg = 'Completed';
+    subMsg = 'Thank you for visiting';
+  } else {
+    // Cancelled etc
+    subMsg = '-';
   }
 
   return (
@@ -114,8 +153,8 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, c
         <div className="token-label">Token #{token.token_number}</div>
         <div className="token-meta">
           {token.user_name}
-          <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{statusMsg}</div>
-          <div style={{ fontSize: '12px' }}>{subMsg}</div>
+          <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginTop: '4px' }}>{statusMsg}</div>
+          <div style={{ fontSize: '12px', marginTop: '2px' }}>{subMsg}</div>
         </div>
       </div>
       <div className="token-actions">
@@ -1581,7 +1620,7 @@ function App() {
         method: 'POST',
         headers: { 'x-admin-key': adminKey },
       });
-      setMessage(`Called ${data.token.user_name}`);
+      setMessage(`Called ${data.user_name}`);
       fetchOfficeDetail(selectedOfficeId);
     } catch (err) { setMessage(err.message); }
   };
@@ -1986,7 +2025,7 @@ function App() {
                         return false;
                       })
                       .map(t => (
-                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} isAdmin={view === 'admin'} currentUser={user} />
+                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} isAdmin={view === 'admin'} currentUser={user} office={selectedOffice} />
                       ))}
                     {view === 'customer' && (selectedOfficeData?.tokens || []).filter(t => {
                       const isMine = t.user_id === user?.id;

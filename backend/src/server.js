@@ -170,180 +170,99 @@ const historyStmt = {
   getByFilter: db.prepare(`SELECT * FROM token_history WHERE office_id = ? AND created_at BETWEEN ? AND ? ORDER BY created_at DESC`),
 };
 
-/* --- Core Queue Logic (The Brain) --- */
 const recalculateQueue = (officeId) => {
   const office = officesStmt.getById.get(officeId);
   if (!office) return;
 
   const allTokens = tokensStmt.getForOffice.all(officeId);
+  // Sort by created_at (FIFO)
   const activeTokens = allTokens.filter(t => ['WAIT', 'ALLOCATED', 'CALLED'].includes(t.status));
-  const completedTokens = allTokens.filter(t => t.status === 'COMPLETED');
 
   // 1. Define Capacity
   const N = office.counter_count || 1;
-  const M = N * 3; // Max Allocated Rule
+  const M = N * 3;
 
-  // 2. Identify Groups
-  let calledTokens = activeTokens.filter(t => t.status === 'CALLED');
+  // 2. Identify Groups & Promote
+  const calledTokens = activeTokens.filter(t => t.status === 'CALLED');
   let allocatedTokens = activeTokens.filter(t => t.status === 'ALLOCATED');
   let waitTokens = activeTokens.filter(t => t.status === 'WAIT');
-
-  // 3. Promote WAIT -> ALLOCATED
-  // Total physically allowed = M. Currently occupied slots = CALLED.length + ALLOCATED.length
-  // Slots available = M - (CALLED.length + ALLOCATED.length)
 
   let currentOccupancy = calledTokens.length + allocatedTokens.length;
   let slotsOpen = M - currentOccupancy;
 
-  const promotedTokens = [];
-
   if (slotsOpen > 0 && waitTokens.length > 0) {
-    // Sort logic: FIFO by created_at is default from DB query
     const toPromote = waitTokens.slice(0, slotsOpen);
-
     toPromote.forEach(token => {
       const now = toIso();
-      // Update DB
       tokensStmt.updateStatus.run({
         id: token.id,
         status: 'ALLOCATED',
         allocation_time: now,
-        service_start_time: null,
+        service_start_time: null, // Calc below
         expected_completion_time: null,
         called_at: null,
         completed_at: null,
         now: now,
-        eta: null // Will calc below
+        eta: null
       });
-      token.status = 'ALLOCATED'; // Local update for loops below
+      token.status = 'ALLOCATED';
       token.allocation_time = now;
-      promotedTokens.push(token);
-      allocatedTokens.push(token); // Add to allocated list for ETA calc
-
-      // Notify
       if (token.user_id) {
-        io.to(`user_${token.user_id}`).emit('notification', { message: "You are allocated! Please come to the office." });
+        io.to(`user_${token.user_id}`).emit('notification', { message: "You have been allocated! Please proceed to the office." });
       }
     });
+    // Refresh lists after promotion
+    allocatedTokens = [...allocatedTokens, ...toPromote];
+    waitTokens = waitTokens.slice(slotsOpen);
   }
 
-  // 4. Calculate Real-time ETAs
-  // Logic: 
-  // - Avg Service Time = office.avg_service_minutes
-  // - A counter handles 1 person every X mins.
-  // - With N counters, the rate is N people every X mins.
-  // - Effective Rate = X / N minutes per person.
+  // 3. Global Queue Position & ETA Calculation
+  // We treat ALL active tokens as a single FIFO queue for positioning
+  // Order: CALLED (served) -> ALLOCATED (waiting) -> WAIT (remote)
+  // Actually, 'CALLED' are technically positions 1..N (or however many active)
+
+  // Re-fetch strict order? already sorted by created_at which handles the FIFO naturally.
+  // Just verify `activeTokens` order. Since `allTokens` is sorted by `created_at`, `activeTokens` is too.
+  // Wait. `toPromote` mutation of local variables `allocatedTokens` doesn't affect `activeTokens` array references? 
+  // Yes it does if objects are ref. But I mutated `waitTokens` by slice.
+  // Safest to re-construct `queue` list.
+
+  const queue = [...calledTokens, ...allocatedTokens, ...waitTokens].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
   const serviceTime = office.avg_service_minutes || 10;
-  const effectiveRate = serviceTime / N;
-
-  // We need to order the "Queue" for service:
-  // Order: CALLED (already being served) -> ALLOCATED (waiting in office/traveling) -> WAIT (waiting at home)
-
-  // Base time: Now
   const nowTime = Date.now();
 
-  // For CALLED tokens: They are in service.
-  // Expected Finish = CalledAt + ServiceTime.
-  // But strictly, we don't need to show ETA to them? They are at counter.
-  // We track when the *Next* counter opens.
-  // To keep it simple: We treat counters as a pool.
-  // The K-th person in line waits K * EffectiveRate minutes.
+  queue.forEach((token, index) => {
+    // Position 1-based
+    const position = index + 1;
 
-  // Let's refine:
-  // - Next available counter roughly in: ServiceTime / N (on average/staggered) or 
-  //   Min(RemainingTime of current CALLED).
-  //   Simplification: Assume continuous flow.
-  //   Start Time for Pos 0 (Next to be called) = Now (if free counter) OR Now + (ServiceTime/N * 0.5)?
-  //   Better: Start Time = Now + (Index * EffectiveRate).
+    // Formula: ETA = (ceil(position / N) - 1) * service_time
+    const waitUnits = Math.ceil(position / N) - 1;
+    const waitMinutes = Math.max(0, waitUnits * serviceTime);
 
-  let queueIndex = 0;
-
-  // 4a. Update ALLOCATED
-  allocatedTokens.forEach(token => {
-    // Est wait
-    const minutesToWait = queueIndex * effectiveRate;
-    queueIndex++;
-
-    const serviceStartTs = nowTime + (minutesToWait * 60000);
+    const serviceStartTs = nowTime + (waitMinutes * 60000);
     const serviceStart = new Date(serviceStartTs).toISOString();
 
-    // Arrival Time (Target) = Allocation Time + Travel Time (Static for now, or dynamic?)
-    // Prompt: "Arrival Time = Allocation Time - Travel Time"? No, "Arrival Time = Allocation Time + Travel".
-    // Prompt says: "Arrival Time = Allocation Time - Travel Time". Wait.
-    // "Estimated time when the token will move from WAIT -> ALLOCATED". That is 'Allocation Time'.
-    // "Office Arrival Time... Exact time the user should leave... Arrival Time = Allocation Time - Travel Time".
-    // This implies 'Allocation Time' is in the FUTURE?
-    // BUT we promote immediately. So Allocation Time is NOW.
-    // Prompt: "1. Allocation Time - Est time when token waits -> allocated".
-    // If they are ALREADY allocated, this is past.
-    // "2. Office Arrival Time - Exact time user should leave... Arrival Time = Allocation Time - Travel Time".
-    // If Allocation is NOW, and Travel is 20 min. Allocation - Travel = 20 mins ago? impossible.
-    // Likely meaning: "Arrival Target = Allocation Time + Travel Time". 
-    // "Reach the office at HH:MM".
-    // Let's assume: Target Arrival = Allocation Time + Travel Time.
+    // Store calculated data
+    // Note: for WAIT tokens, this 'service_start_time' is the predicted Call time.
+    // Frontend will derive Allocation Time from this (Call Time - 3 * ServiceTime or similar)
 
-    const travelMinutes = token.travel_time_minutes || 15;
-    const allocTs = new Date(token.allocation_time || nowTime).getTime();
-    const targetArrivalTs = allocTs + (travelMinutes * 60000);
+    // Only update if changed? Or always update for eta freshness.
+    // We strictly update `eta` and `service_start_time`.
 
-    // ETA (Service Start)
-    const etaMinutes = Math.round((serviceStartTs - nowTime) / 60000);
+    // We assume 'CALLED' status is already set.
+    // We assume 'ALLOCATED' status is already set.
+    // We assume 'WAIT' status is already set.
 
     tokensStmt.updateStatus.run({
       id: token.id,
-      status: 'ALLOCATED',
-      allocation_time: token.allocation_time,
+      status: token.status,
+      allocation_time: token.allocation_time, // Preserve
       service_start_time: serviceStart,
-      expected_completion_time: null,
-      called_at: null,
+      expected_completion_time: token.expected_completion_time,
+      called_at: token.called_at,
       completed_at: null,
-      eta: etaMinutes,
-      now: toIso()
-    });
-  });
-
-  // 4b. Update WAIT
-  waitTokens.forEach(token => {
-    // Wait list starts after Allocated list
-    const minutesToWait = queueIndex * effectiveRate;
-    queueIndex++;
-
-    const serviceStartTs = nowTime + (minutesToWait * 60000);
-    const etaMinutes = Math.round(minutesToWait);
-
-    // Predicted Allocation Time
-    // When will a slot open?
-    // Slot opens when someone completes.
-    // Rate of completion = N per ServiceTime.
-    // My position in WAIT list determines when I get in.
-    // I am K-th in WAIT. I need K slots to open.
-    // Time to open K slots = K * EffectiveRate.
-    // So Allocation Time Approx = Now + (IndexInWait * EffectiveRate).
-
-    // Actually, Allocation depends on M limit. 
-    // I enter ALLOCATED when someone leaves ALLOCATED?
-    // No, someone leaves ALLOCATED by becoming CALLED? Or COMPLETED?
-    // Logic: ALLOCATED count drops when ALLOCATED -> CALLED.
-    // CALLED count drops when CALLED -> COMPLETED.
-    // Total count (ALLOCATED+CALLED) must be <= M.
-    // So a slot opens when someone LEAVES the system (COMPLETED).
-    // So Rate of Allocation = Rate of Completion = N / ServiceTime.
-
-    // Position in Total Line (Alloc + Wait) relative to Head.
-    // But simplistic: Just use effectiveRate.
-
-    const predServiceStart = new Date(serviceStartTs).toISOString();
-
-    tokensStmt.updateStatus.run({
-      id: token.id,
-      status: 'WAIT',
-      allocation_time: null, // Future not stored here usually, but calculated on fly? Or store estimate?
-      service_start_time: predServiceStart,
-      expected_completion_time: null,
-      called_at: null,
-      completed_at: null,
-      eta: etaMinutes,
+      eta: waitMinutes,
       now: toIso()
     });
   });
@@ -351,12 +270,13 @@ const recalculateQueue = (officeId) => {
   // Emit Global Update
   io.to(`office_${officeId}`).emit('queue_update', {
     officeId,
-    tokens: tokensStmt.getForOffice.all(officeId), // Refresh
+    tokens: tokensStmt.getForOffice.all(officeId),
     stats: {
       wait: waitTokens.length,
       allocated: allocatedTokens.length,
       called: calledTokens.length,
-      M, N
+      M, N,
+      serviceTime
     }
   });
 };
