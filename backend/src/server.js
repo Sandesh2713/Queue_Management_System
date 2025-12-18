@@ -128,7 +128,13 @@ const officesStmt = {
 
 const tokensStmt = {
   getById: db.prepare(`SELECT * FROM tokens WHERE id = ?`),
-  getForOffice: db.prepare(`SELECT * FROM tokens WHERE office_id = ? ORDER BY created_at ASC`),
+  getForOffice: db.prepare(`
+    SELECT t.*, u.dob, u.gender, u.email as user_email
+    FROM tokens t
+    LEFT JOIN users u ON t.user_id = u.id 
+    WHERE t.office_id = ? 
+    ORDER BY t.created_at ASC
+  `),
   insert: db.prepare(`
     INSERT INTO tokens (id, office_id, user_id, user_name, user_contact, status, token_number, created_at, lat, lng, travel_time_minutes, service_type)
     VALUES (@id, @office_id, @user_id, @user_name, @user_contact, 'WAIT', @token_number, @created_at, @lat, @lng, @travel_time_minutes, @service_type)

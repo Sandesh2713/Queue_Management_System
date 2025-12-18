@@ -1388,6 +1388,7 @@ function App() {
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [pauseReason, setPauseReason] = useState('Short Break');
   const [pauseMessage, setPauseMessage] = useState('');
+  const [selectedToken, setSelectedToken] = useState(null);
 
   // Wrapper to sync history
   const setView = (newView, addToHistory = true) => {
@@ -2092,8 +2093,11 @@ function App() {
                         return false;
                       })
                       .map(t => (
-                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} isAdmin={view === 'admin'} currentUser={user} office={selectedOffice} />
+                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} isAdmin={view === 'admin'} currentUser={user} office={selectedOffice} onSelect={setSelectedToken} />
                       ))}
+                    {selectedToken && (
+                      <TokenDetailsModal token={selectedToken} office={selectedOffice} onClose={() => setSelectedToken(null)} onAction={updateToken} />
+                    )}
                     {view === 'customer' && (selectedOfficeData?.tokens || []).filter(t => {
                       const isMine = t.user_id === user?.id;
                       if (!isMine) return false;
