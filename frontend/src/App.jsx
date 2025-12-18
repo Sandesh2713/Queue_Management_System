@@ -97,9 +97,10 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, c
   const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   // --- Strict Customer Display Logic ---
-  if (token.status === 'CALLED') {
-    // SCENARIO 1 (subset): Actually at counter
-    statusMsg = 'At Counter';
+  if (office?.is_paused && ['WAIT', 'ALLOCATED'].includes(token.status)) {
+    statusMsg = 'Paused';
+    subMsg = office.pause_message || `Service paused: ${office.pause_reason}`;
+  } else if (token.status === 'CALLED') {
     subMsg = 'Please proceed to the counter';
   } else if (token.status === 'ALLOCATED') {
     // SCENARIO 1 or 2/3 depending on eta
@@ -1383,6 +1384,11 @@ function App() {
   // Initialize view from history state or default
   const [view, setViewState] = useState(user ? (user.role === 'admin' ? 'admin' : 'customer') : 'landing');
 
+  // Pause Modal State
+  const [showPauseModal, setShowPauseModal] = useState(false);
+  const [pauseReason, setPauseReason] = useState('Short Break');
+  const [pauseMessage, setPauseMessage] = useState('');
+
   // Wrapper to sync history
   const setView = (newView, addToHistory = true) => {
     setViewState(newView);
@@ -1644,14 +1650,34 @@ function App() {
 
   const handlePauseToggle = async () => {
     if (!adminKey) return setMessage('Admin key required');
+
+    if (selectedOffice.is_paused) {
+      // Resume Logic
+      try {
+        await fetchJSON(`/api/offices/${selectedOfficeId}/resume`, {
+          method: 'POST',
+          headers: { 'x-admin-key': adminKey }
+        });
+        setMessage('Queue Resumed');
+        fetchOfficeDetail(selectedOfficeId);
+      } catch (err) { setMessage(err.message); }
+    } else {
+      // Open Pause Modal
+      setPauseReason('Short Break');
+      setPauseMessage('Service paused for a short break. We will resume shortly.');
+      setShowPauseModal(true);
+    }
+  };
+
+  const submitPause = async () => {
     try {
-      const newStatus = !selectedOffice.is_paused;
       await fetchJSON(`/api/offices/${selectedOfficeId}/pause`, {
         method: 'POST',
         headers: { 'x-admin-key': adminKey },
-        body: JSON.stringify({ paused: newStatus })
+        body: JSON.stringify({ reason: pauseReason, message: pauseMessage })
       });
-      setMessage(newStatus ? 'Queue Paused' : 'Queue Resumed');
+      setMessage('Queue Paused');
+      setShowPauseModal(false);
       fetchOfficeDetail(selectedOfficeId);
     } catch (err) { setMessage(err.message); }
   };
@@ -1978,6 +2004,47 @@ function App() {
                         </button>
                       </div>
                     </div>
+                    {/* Pause Modal */}
+                    {showPauseModal && (
+                      <div className="modal-overlay">
+                        <div className="modal-content" style={{ width: '400px', maxWidth: '90vw' }}>
+                          <h3 style={{ marginTop: 0 }}>Pause Office Service</h3>
+                          <div className="field" style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Select Reason</label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                              {[
+                                ['Short Break', 'Service paused for a short break. We will resume shortly.'],
+                                ['Lunch Break', 'Service paused for lunch break. Please wait for resume notification.'],
+                                ['System Maintenance', 'Service paused due to system maintenance. ETA will update after resume.']
+                              ].map(([reason, msg]) => (
+                                <label key={reason} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '8px', border: '1px solid var(--gray-300)', borderRadius: '8px' }}>
+                                  <input
+                                    type="radio"
+                                    name="pauseReason"
+                                    checked={pauseReason === reason}
+                                    onChange={() => { setPauseReason(reason); setPauseMessage(msg); }}
+                                  />
+                                  <span style={{ fontWeight: 500 }}>{reason}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="field">
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Additional Note (Optional)</label>
+                            <textarea
+                              value={pauseMessage}
+                              onChange={e => setPauseMessage(e.target.value)}
+                              rows={3}
+                              style={{ width: '100%', borderRadius: '8px', padding: '12px', marginTop: '4px', border: '1px solid var(--gray-300)' }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
+                            <button className="ghost" onClick={() => setShowPauseModal(false)}>Cancel</button>
+                            <button onClick={submitPause} className="danger">Confirm Pause</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </section>
                 )}
 
