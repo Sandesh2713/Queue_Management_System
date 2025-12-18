@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { io } from 'socket.io-client';
 import './App.css';
 import { useAuth } from './AuthContext';
 
 function CreateOfficeWizard({ onSubmit, onBack }) {
-  const [form, setForm] = useState({ name: '', serviceType: '', dailyCapacity: 100, operatingHours: '09:00-17:00', avgServiceMinutes: 10 });
+  const [form, setForm] = useState({ name: '', serviceType: '', dailyCapacity: 100, operatingHours: '09:00-17:00', avgServiceMinutes: 10, counterCount: 1 });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -44,6 +45,12 @@ function CreateOfficeWizard({ onSubmit, onBack }) {
           <input type="number" value={form.dailyCapacity} onChange={e => setForm({ ...form, dailyCapacity: e.target.value })} required />
         </label>
 
+        <label className="field" style={{ marginTop: '16px' }}>
+          <span>Number of Counters (N)</span>
+          <input type="number" value={form.counterCount} onChange={e => setForm({ ...form, counterCount: e.target.value })} required min="1" max="10" />
+          <div style={{ fontSize: '12px', color: 'gray' }}>M = N * 3 (Max Allocations)</div>
+        </label>
+
         <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
           <button type="submit" disabled={loading} style={{ width: '100%' }}>{loading ? 'Creating...' : 'Create Office'}</button>
         </div>
@@ -79,20 +86,39 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, isAdmin, c
   const isTerminal = ['cancelled', 'completed'].includes(token.status);
   const isHolding = token.status === 'holding';
 
+  let statusMsg = token.status;
+  let subMsg = '';
+
+  if (token.status === 'WAIT') {
+    statusMsg = 'Wait at Location';
+    subMsg = token.eta ? `ETA: ~${Math.round(token.eta)} mins` : 'Calculating...';
+  } else if (token.status === 'ALLOCATED') {
+    statusMsg = 'Go to Office';
+    // Calculate Target Arrival
+    if (token.allocation_time) {
+      const allocTime = new Date(token.allocation_time).getTime();
+      const travel = (token.travel_time_minutes || 15) * 60000;
+      const target = new Date(allocTime + travel);
+      subMsg = `Reach by ${target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      subMsg = 'Proceed now';
+    }
+  } else if (token.status === 'CALLED') {
+    statusMsg = 'At Counter';
+    subMsg = 'It\'s your turn!';
+  }
+
   return (
-    <div className="token-row">
+    <div className={`token-row ${token.status}`}>
       <div>
         <div className="token-label">Token #{token.token_number}</div>
         <div className="token-meta">
-          {token.user_name} · {token.status}
-          {token.position ? ` · pos ${token.position}` : ''}
-          {token.status === 'called' && token.called_at && (
-            ` · Called at ${new Date(token.called_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-          )}
+          {token.user_name}
+          <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{statusMsg}</div>
+          <div style={{ fontSize: '12px' }}>{subMsg}</div>
         </div>
       </div>
       <div className="token-actions">
-        <span className={`token-chip ${token.status}`}>{token.status}</span>
         {!isTerminal && !isHolding && (
           <>
             {isAdmin && (
@@ -1213,7 +1239,7 @@ function App() {
   const [bookingForm, setBookingForm] = useState({ customerName: user?.name || '', customerContact: user?.email || '', serviceType: 'General Inquiry', note: '' });
   const [availabilityInput, setAvailabilityInput] = useState('');
   const [isBusy, setIsBusy] = useState(false);
-  const [tokenFilter, setTokenFilter] = useState('active'); // 'active' | 'history'
+  const [tokenFilter, setTokenFilter] = useState('pending'); // 'pending', 'completed', 'cancelled'
 
   const selectedOffice = useMemo(() => selectedOfficeData?.office || null, [selectedOfficeData]);
 
@@ -1258,6 +1284,40 @@ function App() {
   useEffect(() => {
     if (selectedOfficeId) fetchOfficeDetail(selectedOfficeId);
   }, [selectedOfficeId]);
+
+  // Socket.IO Integration
+  useEffect(() => {
+    const socket = io(API_BASE);
+
+    if (user) {
+      socket.emit('join_user', user.id);
+    }
+
+    if (selectedOfficeId) {
+      socket.emit('join_office', selectedOfficeId);
+    }
+
+    socket.on('queue_update', (data) => {
+      if (data.officeId === selectedOfficeId) {
+        setSelectedOfficeData(prev => {
+          if (!prev || !prev.office) return prev; // If initial fetch hasn't happened, ignore update to avoid corruption
+
+          return {
+            ...prev,
+            tokens: data.tokens,
+            office: { ...prev.office, ...data.stats }
+          };
+        });
+      }
+    });
+
+    socket.on('notification', (payload) => {
+      setMessage(payload.message); // Show toast
+      setNotificationCount(c => c + 1); // Increment badge
+    });
+
+    return () => socket.disconnect();
+  }, [selectedOfficeId, user]);
 
   const [historyTokens, setHistoryTokens] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -1315,8 +1375,8 @@ function App() {
           customerContact: formData.customerContact, // Phone
           serviceType: formData.serviceType,
           userId: user?.id,
-          userLat: formData.userLat,
-          userLng: formData.userLng,
+          lat: formData.userLat,
+          lng: formData.userLng,
           note: formData.note // Optional
         }),
       });
@@ -1556,12 +1616,16 @@ function App() {
                 // Admin sees only their own offices, simplified view or just auto-selected. 
                 // Request says "don't show it", implies singular focus.
                 // We will show a simple list if they have multiple, but likely just one.
-                <div key={office.id} className={`office-card selected`} style={{ cursor: 'default' }}>
+                <button
+                  key={office.id}
+                  className={`office-card ${selectedOfficeId === office.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedOfficeId(office.id)}
+                >
                   <div className="office-name">{office.name} (Your Office)</div>
                   <div className="office-meta">
-                    <span>Queue: {office.queueCount}</span>
+                    <span>Queue: {office.queueCount || 0}</span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
 
@@ -1621,7 +1685,7 @@ function App() {
                     )}
                     <Stat label="Avail" value={selectedOffice.available_today} />
                     {view === 'admin' && (
-                      <Stat label="Velocity" value={`${Number(selectedOffice.average_velocity || 5).toFixed(1)}m`} />
+                      <Stat label="Velocity" value={`${Math.round((selectedOffice.counter_count || 1) / (selectedOffice.average_velocity || 5))} t/m`} />
                     )}
                   </div>
                 </div>
@@ -1684,7 +1748,7 @@ function App() {
                       </div>
                       <div className="button-group">
                         <button onClick={handleAvailabilityUpdate} className="secondary-btn" style={{ background: 'var(--gray-200)', color: 'var(--gray-900)' }}>Update</button>
-                        <button onClick={callNext} disabled={selectedOffice.is_paused} className="primary-btn">Call Next</button>
+                        <button onClick={callNext} disabled={selectedOffice.is_paused || (selectedOfficeData?.tokens || []).filter(t => t.status === 'CALLED').length >= (selectedOffice.counter_count || 1)} className="primary-btn">Call Next</button>
                         <button onClick={handlePauseToggle} className={selectedOffice.is_paused ? 'ghost danger' : 'ghost'} style={{ border: '1px solid currentColor' }}>
                           {selectedOffice.is_paused ? 'Resume' : 'Pause'}
                         </button>
@@ -1695,32 +1759,46 @@ function App() {
 
                 <section className="panel-section">
                   <h4>Queue Status</h4>
-                  {view === 'customer' && (
+                  {/* Enable tabs for both customer and admin */}
+                  {(view === 'customer' || view === 'admin') && (
                     <div className="tabs" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                       <button
-                        className={tokenFilter === 'active' ? 'primary small' : 'ghost small'}
-                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'active' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'active' ? '#fff' : 'inherit' }}
-                        onClick={() => setTokenFilter('active')}
+                        className={tokenFilter === 'pending' ? 'primary small' : 'ghost small'}
+                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'pending' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'pending' ? '#fff' : 'inherit' }}
+                        onClick={() => setTokenFilter('pending')}
                       >
-                        Active
+                        Pending
                       </button>
                       <button
-                        className={tokenFilter === 'history' ? 'primary small' : 'ghost small'}
-                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'history' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'history' ? '#fff' : 'inherit' }}
-                        onClick={() => setTokenFilter('history')}
+                        className={tokenFilter === 'completed' ? 'primary small' : 'ghost small'}
+                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'completed' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'completed' ? '#fff' : 'inherit' }}
+                        onClick={() => setTokenFilter('completed')}
                       >
-                        History
+                        Completed
+                      </button>
+                      <button
+                        className={tokenFilter === 'cancelled' ? 'primary small' : 'ghost small'}
+                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'cancelled' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'cancelled' ? '#fff' : 'inherit' }}
+                        onClick={() => setTokenFilter('cancelled')}
+                      >
+                        Cancelled
                       </button>
                     </div>
                   )}
                   <div className="token-list">
                     {(selectedOfficeData?.tokens || [])
                       .filter(t => {
-                        if (view === 'admin') return true;
-                        const isMine = t.user_id === user?.id;
-                        if (!isMine) return false;
-                        if (tokenFilter === 'active') return ['booked', 'queued', 'called'].includes(t.status);
-                        return ['completed', 'cancelled', 'no-show'].includes(t.status);
+                        // Admin sees all users, Customer sees only theirs
+                        if (view === 'customer') {
+                          const isMine = t.user_id === user?.id;
+                          if (!isMine) return false;
+                        }
+
+                        // Apply status filter for both
+                        if (tokenFilter === 'pending') return ['WAIT', 'ALLOCATED', 'CALLED', 'booked', 'queued', 'called'].includes(t.status);
+                        if (tokenFilter === 'completed') return ['COMPLETED', 'completed'].includes(t.status);
+                        if (tokenFilter === 'cancelled') return ['cancelled', 'no-show', 'history'].includes(t.status);
+                        return false;
                       })
                       .map(t => (
                         <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} isAdmin={view === 'admin'} currentUser={user} />
@@ -1728,11 +1806,13 @@ function App() {
                     {view === 'customer' && (selectedOfficeData?.tokens || []).filter(t => {
                       const isMine = t.user_id === user?.id;
                       if (!isMine) return false;
-                      if (tokenFilter === 'active') return ['booked', 'queued', 'called'].includes(t.status);
-                      return ['completed', 'cancelled', 'no-show'].includes(t.status);
+                      if (tokenFilter === 'pending') return ['WAIT', 'ALLOCATED', 'CALLED', 'booked', 'queued', 'called'].includes(t.status);
+                      if (tokenFilter === 'completed') return ['COMPLETED', 'completed'].includes(t.status);
+                      if (tokenFilter === 'cancelled') return ['cancelled', 'no-show', 'history'].includes(t.status);
+                      return false;
                     }).length === 0 && (
                         <div className="muted" style={{ textAlign: 'center', padding: '20px' }}>
-                          {tokenFilter === 'active' ? 'You are not in the queue. Book a slot!' : 'No past tokens found.'}
+                          No tokens found in {tokenFilter} section.
                         </div>
                       )}
                   </div>
