@@ -2,7 +2,8 @@
 
 :root {
   /* Brand Palette - Deep Indigo & Slate */
-  --primary-50: #eef2ff;
+  --primary-50: #eef4ff;
+  /* Lighter, cooler blue */
   --primary-100: #e0e7ff;
   --primary-500: #6366f1;
   --primary-600: #4f46e5;
@@ -20,26 +21,30 @@
   --gray-900: #0f172a;
 
   /* Glassmorphism & UI */
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-  --backdrop-blur: 12px;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  /* Slightly more opaque for better contrast */
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  /* Premium soft shadow */
+  --backdrop-blur: 16px;
 
   /* Semantic Colors */
   --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
-  --bg-app: #f8fafc;
+  --bg-app: #f7faff;
+  /* New soft background */
   --text-main: var(--gray-900);
   --text-muted: var(--gray-500);
 
   /* Shadows & Radius */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 20px;
+  /* Increased for friendlier look */
   --radius-xl: 24px;
 
   /* Typography */
@@ -61,7 +66,8 @@ body {
 
 body {
   font-family: var(--font-sans);
-  background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+  background: linear-gradient(180deg, #f7faff 0%, #eef4ff 100%);
+  /* New Premium Gradient */
   /* Subtle, premium base */
   color: var(--text-main);
   line-height: 1.6;
@@ -98,13 +104,15 @@ select {
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--glass-shadow);
-  padding: 24px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  padding: 32px;
+  /* Increased padding for breathability */
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease;
 }
 
 .card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.1);
+  transform: translateY(-4px);
+  /* Stronger lift */
+  box-shadow: 0 20px 40px 0 rgba(31, 38, 135, 0.08);
 }
 
 /* Layouts */
@@ -137,6 +145,62 @@ select {
   font-size: 1rem;
   margin-top: 4px;
 }
+
+/* Animations & Micro-interactions */
+.hover-lift {
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.08);
+  /* Smoother lift shadow */
+}
+
+.active-scale:active {
+  transform: scale(0.98);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Status Chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chip-success {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #d1fae5;
+}
+
+.chip-warning {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fef3c7;
+}
+
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 
 /* Buttons */
 .btn {

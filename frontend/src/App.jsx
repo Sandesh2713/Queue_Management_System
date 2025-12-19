@@ -1048,18 +1048,21 @@ function NotificationPanel({ userId, onClose }) {
   );
 }
 
-// MapPicker Component
-function MapPicker({ onSelect }) {
+// Modern Location Picker
+function LocationPicker({ onSelect, onDetect, status }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markerRef = useRef(null);
 
   useEffect(() => {
     if (mapRef.current && !mapInstance.current && window.L) {
-      mapInstance.current = window.L.map(mapRef.current).setView([20, 78], 4); // Default India view
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+      mapInstance.current = window.L.map(mapRef.current, { zoomControl: false }).setView([20, 78], 4);
+      window.L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap & CartoDB'
       }).addTo(mapInstance.current);
+
+      // Add Zoom Control at bottom right for cleaner look
+      window.L.control.zoom({ position: 'bottomright' }).addTo(mapInstance.current);
 
       mapInstance.current.on('click', (e) => {
         const { lat, lng } = e.latlng;
@@ -1068,18 +1071,22 @@ function MapPicker({ onSelect }) {
         onSelect({ lat, lng });
       });
 
-      // Try to get current location
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          mapInstance.current.setView([latitude, longitude], 13);
-        },
-        () => { },
-        { timeout: 5000 }
-      );
+      // Try initial detect
+      if (status === 'detecting') {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude, longitude } = pos.coords;
+            mapInstance.current.setView([latitude, longitude], 14);
+            if (markerRef.current) markerRef.current.remove();
+            markerRef.current = window.L.marker([latitude, longitude]).addTo(mapInstance.current);
+            onSelect({ lat: latitude, lng: longitude });
+          },
+          () => { },
+          { timeout: 5000 }
+        );
+      }
     }
 
-    // Cleanup
     return () => {
       if (mapInstance.current) {
         mapInstance.current.remove();
@@ -1088,15 +1095,40 @@ function MapPicker({ onSelect }) {
     };
   }, [onSelect]);
 
-  return <div ref={mapRef} style={{ height: '300px', width: '100%', borderRadius: '12px', marginTop: '16px' }} />;
+  return (
+    <div style={{ position: 'relative', height: '320px', width: '100%', borderRadius: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-md)', border: '1px solid var(--gray-200)' }}>
+      <div ref={mapRef} style={{ height: '100%', width: '100%', zIndex: 0 }} />
+
+      {/* Floating Controls */}
+      <div style={{ position: 'absolute', top: '16px', left: '16px', right: '16px', zIndex: 400, display: 'flex', gap: '8px' }}>
+        <div style={{ flex: 1, background: 'white', padding: '12px 16px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>📍</span>
+          {status === 'detected' ? 'Location Pinned' : 'Tap on map to pin location'}
+        </div>
+        <button
+          onClick={onDetect}
+          className="hover-lift"
+          style={{
+            background: 'white', border: 'none', borderRadius: '12px', width: '48px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', cursor: 'pointer', fontSize: '1.2rem'
+          }}
+          title="Detect My Location"
+        >
+          🎯
+        </button>
+      </div>
+    </div>
+  );
 }
 
-// Booking Modal Component
+// 3-Step Booking Wizard
 function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
   if (!isOpen) return null;
+
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     customerName: user?.name || '',
-    customerEmail: '', // Explicitly empty as requested
+    customerEmail: '',
     customerContact: '',
     serviceType: '',
     userLat: null,
@@ -1104,13 +1136,17 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
   });
   const [locationStatus, setLocationStatus] = useState('');
 
+  const nextStep = () => setStep(s => s + 1);
+  const prevStep = () => setStep(s => s - 1);
+
   const handleSubmit = () => {
     onSubmit(form);
     onClose();
+    setStep(1); // Reset
   };
 
-  const detectLocation = () => {
-    setLocationStatus('Detecting...');
+  const handleDetect = () => {
+    setLocationStatus('detecting');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setForm(prev => ({ ...prev, userLat: pos.coords.latitude, userLng: pos.coords.longitude }));
@@ -1121,62 +1157,121 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
     );
   };
 
+  const services = office?.service_type
+    ? office.service_type.split(',').map(s => s.trim()).filter(Boolean)
+    : ['General Inquiry', 'Support', 'Consultation'];
+
   return (
-    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
-      <div className="modal-content" style={{ background: '#fff', padding: '24px', borderRadius: '24px', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h3 style={{ marginBottom: '20px' }}>Book Appointment</h3>
-
-        <div className="field-grid" style={{ gridTemplateColumns: '1fr', gap: '16px' }}>
-          <label className="field">
-            <span>Name</span>
-            <input value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} />
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <label className="field">
-              <span>Email</span>
-              <input type="email" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} required />
-            </label>
-            <label className="field">
-              <span>Phone (Optional)</span>
-              <input type="tel" value={form.customerContact} onChange={e => setForm({ ...form, customerContact: e.target.value })} />
-            </label>
+    <div className="modal-overlay">
+      <div className="modal-content animate-slide-up" style={{ padding: '0', overflow: 'hidden', maxWidth: '550px' }}>
+        {/* Header with Progress */}
+        <div style={{ padding: '24px', background: 'var(--gray-50)', borderBottom: '1px solid var(--gray-200)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '1.2rem' }}>Book Appointment</h3>
+            <button className="btn btn-ghost small" onClick={onClose}>Close</button>
           </div>
-          <label className="field">
-            <span>Service Type</span>
-            <select value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid var(--gray-300)', background: '#fff' }}>
-              <option value="">Select Service...</option>
-              {office?.service_type
-                ? office.service_type.split(',').map(s => s.trim()).filter(Boolean).map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))
-                : <option value="General Inquiry">General Inquiry</option>
-              }
-            </select>
-          </label>
-
-          <div style={{ border: '1px solid var(--gray-200)', borderRadius: '12px', padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontWeight: '500', fontSize: '14px' }}>Location for ETA</span>
-              <button type="button" className="ghost" onClick={detectLocation} style={{ fontSize: '12px', padding: '4px 8px' }}>
-                📍 Detect Current
-              </button>
-            </div>
-            {locationStatus === 'detected' && <div style={{ fontSize: '12px', color: 'green', marginBottom: '8px' }}>✓ Location acquired</div>}
-            {locationStatus === 'failed' && <div style={{ fontSize: '12px', color: 'red', marginBottom: '8px' }}>⚠ Detection failed, please pick on map</div>}
-
-            <div style={{ fontSize: '12px', color: 'var(--gray-500)', marginBottom: '8px' }}>Or select on map:</div>
-            <MapPicker onSelect={({ lat, lng }) => {
-              setForm(f => ({ ...f, userLat: lat, userLng: lng }));
-              setLocationStatus('detected');
-            }} />
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[1, 2, 3].map(s => (
+              <div key={s} style={{
+                height: '4px', flex: 1, borderRadius: '2px',
+                background: s <= step ? 'var(--primary-500)' : 'var(--gray-300)',
+                transition: 'background 0.3s ease'
+              }} />
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+            <span>Details</span>
+            <span>Service</span>
+            <span>Location</span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-          <button className="ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
-          <button onClick={handleSubmit} disabled={!form.customerName || !form.serviceType || (!form.userLat && !form.userLng)} style={{ flex: 1 }}>
-            Confirm Booking
-          </button>
+        {/* Body */}
+        <div style={{ padding: '32px' }}>
+          {step === 1 && (
+            <div className="animate-fade-in">
+              <h4 style={{ marginBottom: '20px' }}>Your Details</h4>
+              <div className="grid-1" style={{ gap: '16px' }}>
+                <div className="input-group">
+                  <label className="input-label">Full Name</label>
+                  <input className="input-field" value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} autoFocus />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Email Address</label>
+                  <input className="input-field" type="email" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Phone (Optional)</label>
+                  <input className="input-field" type="tel" value={form.customerContact} onChange={e => setForm({ ...form, customerContact: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="animate-fade-in">
+              <h4 style={{ marginBottom: '20px' }}>Select Service</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {services.map(service => (
+                  <button
+                    key={service}
+                    className="hover-lift"
+                    onClick={() => setForm({ ...form, serviceType: service })}
+                    style={{
+                      padding: '16px', borderRadius: '12px', border: form.serviceType === service ? '2px solid var(--primary-500)' : '1px solid var(--gray-200)',
+                      background: form.serviceType === service ? 'var(--primary-50)' : 'white',
+                      textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{ fontWeight: '600', color: form.serviceType === service ? 'var(--primary-700)' : 'var(--gray-900)' }}>{service}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="animate-fade-in">
+              <h4 style={{ marginBottom: '12px' }}>Confirm Location</h4>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '20px' }}>Help us estimate your arrival time.</p>
+              <LocationPicker
+                status={locationStatus}
+                onDetect={handleDetect}
+                onSelect={({ lat, lng }) => {
+                  setForm(f => ({ ...f, userLat: lat, userLng: lng }));
+                  setLocationStatus('detected');
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '24px', borderTop: '1px solid var(--gray-200)', display: 'flex', justifyContent: 'space-between' }}>
+          {step > 1 ? (
+            <button className="btn btn-secondary" onClick={prevStep}>Back</button>
+          ) : (
+            <div /> // Spacer
+          )}
+
+          {step < 3 ? (
+            <button
+              className="btn btn-primary"
+              onClick={nextStep}
+              disabled={step === 1 ? (!form.customerName || !form.customerEmail) : (!form.serviceType)}
+            >
+              Next Step
+            </button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              onClick={handleSubmit}
+              disabled={!form.userLat && !form.userLng}
+              style={{ paddingLeft: '32px', paddingRight: '32px' }}
+            >
+              Confirm Booking
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1220,64 +1315,88 @@ const ProfileMenu = ({ user, onNavigate, onLogout }) => {
 
 const ProfileView = ({ user, onBack, office }) => {
   return (
-    <div className="card" style={{ maxWidth: '600px', margin: '40px auto' }}>
-      <div className="panel-header">
-        <h3>Profile Details</h3>
-        <button className="btn btn-ghost" onClick={onBack}>Back</button>
+    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      <div className="page-header">
+        <div>
+          <h2 className="page-title">My Profile</h2>
+          <p className="page-subtitle">Manage your personal information</p>
+        </div>
+        <button className="btn btn-ghost" onClick={onBack}>Back to Dashboard</button>
       </div>
-      <div style={{ display: 'grid', gap: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', paddingBottom: '20px', borderBottom: '1px solid var(--gray-200)' }}>
-          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary-600)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold', boxShadow: 'var(--shadow-md)' }}>
-            {user.name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '4px' }}>{user.name}</div>
-            <div className="badge badge-neutral">{user.role}</div>
-          </div>
-        </div>
 
-        <div className="grid-2">
-          <div className="input-group">
-            <label className="input-label">Email Address</label>
-            <div style={{ fontSize: '1rem' }}>{user.email}</div>
-          </div>
-          <div className="input-group">
-            <label className="input-label">Phone Number</label>
-            <div style={{ fontSize: '1rem' }}>{user.phone || 'Not provided'}</div>
-          </div>
-        </div>
-
-        <div className="grid-2">
-          <div className="input-group">
-            <label className="input-label">Date of Birth</label>
-            <div style={{ fontSize: '1rem' }}>{user.dob ? new Date(user.dob).toLocaleDateString() : 'N/A'}</div>
-          </div>
-          <div className="input-group">
-            <label className="input-label">Age</label>
-            <div style={{ fontSize: '1rem' }}>{user.age || 'N/A'}</div>
-          </div>
-        </div>
-
-        <div className="input-group">
-          <label className="input-label">Gender</label>
-          <div style={{ fontSize: '1rem' }}>{user.gender || 'Not provided'}</div>
-        </div>
-
-        {user.role === 'admin' && office && (
-          <div style={{ background: 'var(--gray-50)', padding: '16px', borderRadius: 'var(--radius-md)' }}>
-            <h4 style={{ marginBottom: '16px', color: 'var(--primary-700)' }}>Office Details</h4>
-            <div className="grid-2">
-              <div className="input-group">
-                <label className="input-label">Name</label>
-                <div>{office.name}</div>
-              </div>
-              <div className="input-group">
-                <label className="input-label">Service Time</label>
-                <div>{office.avg_service_minutes} mins</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 300px', gap: '32px', alignItems: 'start' }}>
+        {/* Left Col: Personal Info */}
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '32px' }}>
+            <div style={{
+              width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))',
+              color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 'bold',
+              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)'
+            }}>
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{user.name}</h3>
+              <div className={`chip ${user.role === 'admin' ? 'chip-success' : 'chip-warning'}`}>
+                <span className="chip-dot"></span>
+                {user.role}
               </div>
             </div>
           </div>
-        )}
+
+          <h4 style={{ marginBottom: '20px', borderBottom: '1px solid var(--gray-200)', paddingBottom: '12px' }}>Personal Details</h4>
+          <div className="grid-2">
+            <div className="input-group">
+              <label className="input-label">Email</label>
+              <div className="input-field" style={{ background: 'var(--gray-50)' }}>{user.email}</div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">Phone</label>
+              <div className="input-field" style={{ background: 'var(--gray-50)' }}>{user.phone || 'Not provided'}</div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">Date of Birth</label>
+              <div className="input-field" style={{ background: 'var(--gray-50)' }}>{user.dob ? new Date(user.dob).toLocaleDateString() : 'Not provided'}</div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">Age/Gender</label>
+              <div className="input-field" style={{ background: 'var(--gray-50)' }}>
+                {user.age ? `${user.age} yrs` : '-'} · {user.gender || '-'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Col: Office / Stats */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {user.role === 'admin' && office ? (
+            <div className="card hover-lift">
+              <h4 style={{ marginBottom: '16px' }}>Office Structure</h4>
+              <div className="input-group">
+                <label className="input-label">Office Name</label>
+                <div style={{ fontWeight: '600', fontSize: '1.1rem' }}>{office.name}</div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                <span className="text-muted">Avg. Service Time</span>
+                <span className="chip chip-success">{office.avg_service_minutes} mins</span>
+              </div>
+            </div>
+          ) : (
+            <div className="card hover-lift">
+              <h4 style={{ marginBottom: '16px' }}>Membership</h4>
+              <div style={{ padding: '16px', background: 'var(--primary-50)', borderRadius: '12px', border: '1px solid var(--primary-100)' }}>
+                <div style={{ fontSize: '0.9rem', color: 'var(--primary-700)', fontWeight: '600' }}>Standard Member</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--primary-600)', marginTop: '4px' }}>Joined {new Date().getFullYear()}</div>
+              </div>
+            </div>
+          )}
+
+          <div className="card" style={{ background: 'linear-gradient(135deg, var(--primary-600), var(--primary-700))', color: 'white' }}>
+            <h4 style={{ color: 'white', marginBottom: '8px' }}>GetEzi Pro</h4>
+            <p style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '16px' }}>Upgrade to manage multiple offices and get advanced analytics.</p>
+            <button className="btn" style={{ background: 'rgba(255,255,255,0.2)', color: 'white', width: '100%', border: 'none' }}>Coming Soon</button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1298,7 +1417,7 @@ const SettingsView = ({ user, onBack, adminKey, selectedOfficeId }) => {
         method: 'PUT',
         body: JSON.stringify({ userId: user.id, retentionDays: Number(retention) })
       });
-      setMessage('Retention updated. Changes apply daily.');
+      setMessage('Preferences saved successfully.');
     } catch (err) { setMessage(err.message); } finally { setLoading(false); }
   };
 
@@ -1306,13 +1425,10 @@ const SettingsView = ({ user, onBack, adminKey, selectedOfficeId }) => {
     if (!adminKey) return setMessage('Admin Access Required');
     setLoading(true);
     try {
-      const query = `officeId=${selectedOfficeId}&start=${exportStart}&end=${exportEnd}`;
-      const response = await fetch(`${API_BASE}/api/admin/token-history/export?${query}`, {
-        headers: {
-          'Authorization': `Bearer ${sessionStorage.getItem('token')}`
-        }
+      const query = new URLSearchParams({ start: exportStart, end: exportEnd, format: 'xlsx' }).toString();
+      const response = await fetch(`/api/admin/export?${query}`, {
+        headers: { 'x-admin-key': adminKey }
       });
-
       if (!response.ok) throw new Error('Export failed');
 
       const blob = await response.blob();
@@ -1327,63 +1443,100 @@ const SettingsView = ({ user, onBack, adminKey, selectedOfficeId }) => {
     } catch (err) { setMessage(err.message); } finally { setLoading(false); }
   };
 
-  if (user.role !== 'admin') {
-    return (
-      <div className="panel" style={{ maxWidth: '600px', margin: '40px auto', textAlign: 'center' }}>
-        <h3>Settings</h3>
-        <p>Customer settings are coming soon.</p>
-        <button onClick={onBack}>Back</button>
-      </div>
-    );
-  }
-
   return (
-    <div className="card" style={{ maxWidth: '600px', margin: '40px auto' }}>
-      <div className="panel-header">
-        <h3>Admin Settings</h3>
-        <button className="btn btn-ghost" onClick={onBack}>Back</button>
+    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <div className="page-header">
+        <div>
+          <h2 className="page-title">Settings</h2>
+          <p className="page-subtitle">Configure your workspace preferences</p>
+        </div>
+        <button className="btn btn-ghost" onClick={onBack}>Back to Dashboard</button>
       </div>
 
-      {message && <div className="badge badge-success" style={{ marginBottom: '16px', display: 'block', width: 'fit-content' }}>{message}</div>}
+      <div style={{ display: 'grid', gap: '24px' }}>
+        {/* Data Retention Card */}
+        {user.role === 'admin' ? (
+          <>
+            <section className="card hover-lift">
+              <div className="panel-header">
+                <div>
+                  <h3 style={{ fontSize: '1.2rem' }}>Data Management</h3>
+                  <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '4px' }}>Control how long your data is stored.</p>
+                </div>
+              </div>
+              <div className="grid-2">
+                <div className="input-group">
+                  <label className="input-label">History Retention (Days)</label>
+                  <select
+                    className="input-field"
+                    value={retention}
+                    onChange={e => setRetention(e.target.value)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <option value={30}>30 Days</option>
+                    <option value={60}>60 Days</option>
+                    <option value={90}>90 Days</option>
+                    <option value={365}>1 Year</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '8px' }}>
+                  <button className="btn btn-primary" onClick={handleSaveRetention} disabled={loading} style={{ width: '100%' }}>
+                    {loading ? 'Saving...' : 'Save Preference'}
+                  </button>
+                </div>
+              </div>
+              {message && <div style={{ marginTop: '12px', color: 'var(--primary-600)', fontWeight: '500' }}>{message}</div>}
+            </section>
 
-      <div style={{ marginBottom: '32px' }}>
-        <h4 style={{ marginBottom: '8px' }}>History Retention</h4>
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-          Automatically delete token history older than the selected period.
-        </p>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <select
-            value={retention}
-            onChange={e => setRetention(e.target.value)}
-            className="input-field"
-            style={{ flex: 1 }}
-          >
-            <option value="7">7 Days</option>
-            <option value="14">14 Days</option>
-            <option value="30">30 Days</option>
-          </select>
-          <button className="btn btn-secondary" onClick={handleSaveRetention} disabled={loading}>Save</button>
-        </div>
-      </div>
+            {/* Export Card */}
+            <section className="card hover-lift">
+              <div className="panel-header">
+                <div>
+                  <h3 style={{ fontSize: '1.2rem' }}>Export Data</h3>
+                  <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '4px' }}>Download your token history as CSV.</p>
+                </div>
+              </div>
+              <div className="grid-3">
+                <div className="input-group">
+                  <label className="input-label">Start Date</label>
+                  <input type="date" className="input-field" value={exportStart} onChange={e => setExportStart(e.target.value)} />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">End Date</label>
+                  <input type="date" className="input-field" value={exportEnd} onChange={e => setExportEnd(e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '8px' }}>
+                  <button className="btn btn-secondary" onClick={handleExport} style={{ width: '100%' }}>
+                    Download CSV
+                  </button>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : (
+          <div className="card hover-lift text-center" style={{ padding: '48px' }}>
+            <h3 style={{ marginBottom: '8px' }}>Coming Soon</h3>
+            <p className="text-muted">Customer preferences are under development.</p>
+          </div>
+        )}
 
-      <div style={{ borderTop: '1px solid var(--gray-200)', paddingTop: '24px' }}>
-        <h4 style={{ marginBottom: '8px' }}>Export Data</h4>
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-          Download token history as an Excel file.
-        </p>
-        <div className="grid-2" style={{ marginBottom: '16px' }}>
-          <label className="input-group">
-            <span className="input-label">From</span>
-            <input className="input-field" type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} />
-          </label>
-          <label className="input-group">
-            <span className="input-label">To</span>
-            <input className="input-field" type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} />
-          </label>
-        </div>
-        <button className="btn btn-primary" onClick={handleExport} disabled={loading} style={{ width: '100%' }}>
-          {loading ? 'Processing...' : 'Download Excel Report'}
-        </button>
+        {/* Future Settings Placeholder */}
+        <section className="card" style={{ opacity: 0.7 }}>
+          <div className="panel-header">
+            <div>
+              <h3 style={{ fontSize: '1.2rem' }}>Notifications</h3>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '4px' }}>Email & SMS alerts (Coming Soon)</p>
+            </div>
+            <span className="chip chip-warning">Beta</span>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Daily Digest</label>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button className="btn btn-secondary" disabled>Email Me</button>
+              <button className="btn btn-secondary" disabled>SMS Me</button>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -2007,7 +2160,15 @@ function App() {
               <>
                 <section className="card" style={{ marginBottom: '24px' }}>
                   <div className="panel-header">
-                    <h3>{selectedOffice.name}</h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <h3 style={{ fontSize: '1.5rem', letterSpacing: '-0.02em' }}>{selectedOffice.name}</h3>
+                      {view === 'admin' && (
+                        <span className={`chip ${selectedOffice.is_paused ? 'chip-warning' : 'chip-success'}`}>
+                          <span className="chip-dot" />
+                          {selectedOffice.is_paused ? 'Paused' : 'Live'}
+                        </span>
+                      )}
+                    </div>
                     <div className="stat-group">
                       {view === 'admin' && (
                         <button className="btn btn-ghost small" onClick={() => setView('history')} style={{ marginRight: 'auto' }}>View Archives</button>
@@ -2037,9 +2198,12 @@ function App() {
                   <section className="card" style={{ marginBottom: '24px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <h4 style={{ fontSize: '1.2rem' }}>Book a Slot</h4>
-                        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                          {selectedOffice.available_today > 0 ? 'Slots available immediately.' : `Current wait: approx ${Math.round(selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes))} mins.`}
+                        <h4 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>Book a Slot</h4>
+                        <p style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
+                          {selectedOffice.available_today > 0
+                            ? "We're open! Book now to skip the line."
+                            : `Current estimated wait is ${Math.round(selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes))} mins. We'll notify you.`
+                          }
                         </p>
                       </div>
                       <button className="btn btn-primary" onClick={() => setIsBookingModalOpen(true)}>Book Now</button>
@@ -2139,7 +2303,9 @@ function App() {
                 )}
 
                 <section className="card">
-                  <h4 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Queue Status</h4>
+                  <h4 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>
+                    {view === 'customer' ? 'Your Visit Status' : 'Live Queue Operations'}
+                  </h4>
                   {/* Enable tabs for both customer and admin */}
                   {(view === 'customer' || view === 'admin') && (
                     <div className="tabs" style={{ display: 'flex', gap: '8px', marginBottom: '20px', background: 'var(--gray-50)', padding: '4px', borderRadius: 'var(--radius-md)', width: 'fit-content' }}>
