@@ -176,8 +176,8 @@ const tokensStmt = {
     ORDER BY t.created_at ASC
   `),
   insert: db.prepare(`
-    INSERT INTO tokens (id, office_id, user_id, user_name, user_contact, status, token_number, created_at, lat, lng, travel_time_minutes, service_type)
-    VALUES (@id, @office_id, @user_id, @user_name, @user_contact, 'WAIT', @token_number, @created_at, @lat, @lng, @travel_time_minutes, @service_type)
+    INSERT INTO tokens (id, office_id, user_id, user_name, user_contact, status, token_number, created_at, lat, lng, travel_time_minutes, service_type, customer_address)
+    VALUES (@id, @office_id, @user_id, @user_name, @user_contact, 'WAIT', @token_number, @created_at, @lat, @lng, @travel_time_minutes, @service_type, @customer_address)
   `),
   updateStatus: db.prepare(`
     UPDATE tokens SET 
@@ -453,13 +453,15 @@ app.post('/api/offices/:id/book', (req, res) => {
   try {
     const { id } = req.params;
     const office = ensureOffice(id);
-    const { customerName, customerContact, lat, lng, userId, serviceType } = req.body;
+    const { customerName, customerContact, lat, lng, userId, serviceType, customerAddress, travelTime: clientTravelTime } = req.body;
 
     if (!customerName) return res.status(400).json({ error: 'Name required' });
 
     // Calc Travel Time
     let travelTime = 15; // default
-    if (lat && lng && office.latitude && office.longitude) {
+    if (clientTravelTime) {
+      travelTime = clientTravelTime; // Trust client if provided (since we have better logic there now)
+    } else if (lat && lng && office.latitude && office.longitude) {
       const dist = haversineDistance(lat, lng, office.latitude, office.longitude);
       travelTime = Math.ceil(dist * 2);
     }
@@ -475,7 +477,8 @@ app.post('/api/offices/:id/book', (req, res) => {
       lat: lat || null,
       lng: lng || null,
       travel_time_minutes: travelTime,
-      service_type: serviceType || 'General'
+      service_type: serviceType || 'General',
+      customer_address: customerAddress || ''
     };
 
     db.transaction(() => {

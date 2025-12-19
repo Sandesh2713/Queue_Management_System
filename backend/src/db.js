@@ -65,10 +65,17 @@ CREATE TABLE IF NOT EXISTS tokens (
   lng REAL,
   travel_time_minutes INTEGER,
   service_type TEXT,
+  customer_address TEXT,
   FOREIGN KEY (office_id) REFERENCES offices(id),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+`);
 
+try {
+  db.exec("ALTER TABLE tokens ADD COLUMN customer_address TEXT");
+} catch (e) { /* Column likely exists */ }
+
+db.exec(`
 CREATE TABLE IF NOT EXISTS queue_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token_id TEXT NOT NULL,

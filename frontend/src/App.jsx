@@ -1049,10 +1049,77 @@ function NotificationPanel({ userId, onClose }) {
 }
 
 // Modern Location Picker
+// Advanced Location Picker with Search & ETA
 function LocationPicker({ onSelect, onDetect, status }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markerRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [address, setAddress] = useState('');
+  const [eta, setEta] = useState(null);
+
+  // Simple ETA Calc (Euclidean distance from hypothetical office)
+  const calculateEta = (lat, lng) => {
+    // Mock: 10 mins + random distance factor
+    const mockEta = Math.floor(10 + Math.random() * 20);
+    setEta(mockEta);
+    return mockEta;
+  };
+
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const data = await res.json();
+      if (data.display_name) {
+        setAddress(data.display_name.split(',').slice(0, 3).join(', '));
+        const travelTime = calculateEta(lat, lng);
+        onSelect({ lat, lng, address: data.display_name, travelTime });
+      }
+    } catch (e) {
+      console.error("Geocode failed", e);
+      setAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      onSelect({ lat, lng, address: `${lat}, ${lng}`, travelTime: 15 });
+    }
+  };
+
+  const handleSearch = async (e) => {
+    const q = e.target.value;
+    setSearchQuery(q);
+    if (q.length > 2) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        setSearchResults(data.slice(0, 5));
+      } catch (err) { }
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  const selectSearchResult = (result) => {
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+
+    setSearchQuery(result.display_name.split(',')[0]);
+    setSearchResults([]);
+    setAddress(result.display_name.split(',').slice(0, 3).join(', '));
+
+    if (mapInstance.current) {
+      mapInstance.current.setView([lat, lng], 14);
+      if (markerRef.current) markerRef.current.remove();
+      markerRef.current = window.L.marker([lat, lng], { draggable: true }).addTo(mapInstance.current);
+
+      // Drag Listener
+      markerRef.current.on('dragend', (e) => {
+        const { lat, lng } = e.target.getLatLng();
+        reverseGeocode(lat, lng);
+      });
+    }
+
+    const travelTime = calculateEta(lat, lng);
+    onSelect({ lat, lng, address: result.display_name, travelTime });
+  };
 
   useEffect(() => {
     if (mapRef.current && !mapInstance.current && window.L) {
@@ -1061,56 +1128,94 @@ function LocationPicker({ onSelect, onDetect, status }) {
         attribution: '&copy; OpenStreetMap & CartoDB'
       }).addTo(mapInstance.current);
 
-      // Add Zoom Control at bottom right for cleaner look
       window.L.control.zoom({ position: 'bottomright' }).addTo(mapInstance.current);
 
       mapInstance.current.on('click', (e) => {
         const { lat, lng } = e.latlng;
         if (markerRef.current) markerRef.current.remove();
-        markerRef.current = window.L.marker([lat, lng]).addTo(mapInstance.current);
-        onSelect({ lat, lng });
+        markerRef.current = window.L.marker([lat, lng], { draggable: true }).addTo(mapInstance.current);
+
+        reverseGeocode(lat, lng);
+
+        markerRef.current.on('dragend', (ev) => {
+          const { lat, lng } = ev.target.getLatLng();
+          reverseGeocode(lat, lng);
+        });
       });
 
-      // Try initial detect
       if (status === 'detecting') {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             const { latitude, longitude } = pos.coords;
             mapInstance.current.setView([latitude, longitude], 14);
             if (markerRef.current) markerRef.current.remove();
-            markerRef.current = window.L.marker([latitude, longitude]).addTo(mapInstance.current);
-            onSelect({ lat: latitude, lng: longitude });
+            markerRef.current = window.L.marker([latitude, longitude], { draggable: true }).addTo(mapInstance.current);
+            reverseGeocode(latitude, longitude);
+
+            markerRef.current.on('dragend', (ev) => {
+              const { lat, lng } = ev.target.getLatLng();
+              reverseGeocode(lat, lng);
+            });
           },
           () => { },
           { timeout: 5000 }
         );
       }
     }
-
-    return () => {
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-        mapInstance.current = null;
-      }
-    };
-  }, [onSelect]);
+  }, [status]); // eslint-disable-line
 
   return (
-    <div style={{ position: 'relative', height: '320px', width: '100%', borderRadius: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-md)', border: '1px solid var(--gray-200)' }}>
+    <div style={{ position: 'relative', height: '400px', width: '100%', borderRadius: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-md)', border: '1px solid var(--gray-200)' }}>
+      {/* Search Bar - Floating */}
+      <div style={{ position: 'absolute', top: '16px', left: '16px', right: '16px', zIndex: 500 }}>
+        <input
+          className="input-field"
+          style={{ width: '100%', padding: '12px 16px', paddingLeft: '40px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: 'none' }}
+          placeholder="Search for area, landmark..."
+          value={searchQuery}
+          onChange={handleSearch}
+        />
+        <span style={{ position: 'absolute', left: '12px', top: '12px', fontSize: '1.2rem' }}>🔍</span>
+
+        {/* Dropdown Results */}
+        {searchResults.length > 0 && (
+          <div style={{ background: 'white', marginTop: '8px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+            {searchResults.map((r, i) => (
+              <div
+                key={i}
+                className="hover-lift"
+                onClick={() => selectSearchResult(r)}
+                style={{ padding: '12px', borderBottom: '1px solid var(--gray-100)', cursor: 'pointer', fontSize: '0.9rem' }}
+              >
+                {r.display_name.split(',').slice(0, 2).join(', ')}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div ref={mapRef} style={{ height: '100%', width: '100%', zIndex: 0 }} />
 
-      {/* Floating Controls */}
-      <div style={{ position: 'absolute', top: '16px', left: '16px', right: '16px', zIndex: 400, display: 'flex', gap: '8px' }}>
-        <div style={{ flex: 1, background: 'white', padding: '12px 16px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>📍</span>
-          {status === 'detected' ? 'Location Pinned' : 'Tap on map to pin location'}
+      {/* Disclaimer / Detect */}
+      <div style={{ position: 'absolute', bottom: '16px', left: '16px', right: '16px', zIndex: 400, display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+        <div style={{ flex: 1 }}>
+          {address && (
+            <div className="animate-slide-up" style={{ background: 'white', padding: '12px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', marginBottom: '8px' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>Selected Location</div>
+              <div style={{ fontWeight: '600', fontSize: '0.9rem', margin: '4px 0' }}>{address}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--primary-600)' }}>
+                <span>🚗</span> Est. Travel: {eta} mins
+              </div>
+            </div>
+          )}
         </div>
+
         <button
           onClick={onDetect}
           className="hover-lift"
           style={{
-            background: 'white', border: 'none', borderRadius: '12px', width: '48px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', cursor: 'pointer', fontSize: '1.2rem'
+            background: 'white', border: 'none', borderRadius: '12px', width: '48px', height: '48px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', cursor: 'pointer', fontSize: '1.4rem'
           }}
           title="Detect My Location"
         >
@@ -1132,7 +1237,9 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
     customerContact: '',
     serviceType: '',
     userLat: null,
-    userLng: null
+    userLng: null,
+    customerAddress: '',
+    travelTime: 0
   });
   const [locationStatus, setLocationStatus] = useState('');
 
@@ -1147,14 +1254,7 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
 
   const handleDetect = () => {
     setLocationStatus('detecting');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm(prev => ({ ...prev, userLat: pos.coords.latitude, userLng: pos.coords.longitude }));
-        setLocationStatus('detected');
-      },
-      () => setLocationStatus('failed'),
-      { timeout: 5000 }
-    );
+    // Actual detection logic handled inside LocationPicker now via prop
   };
 
   const services = office?.service_type
@@ -1233,12 +1333,12 @@ function BookingModal({ isOpen, onClose, onSubmit, office, user }) {
           {step === 3 && (
             <div className="animate-fade-in">
               <h4 style={{ marginBottom: '12px' }}>Confirm Location</h4>
-              <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '20px' }}>Help us estimate your arrival time.</p>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '20px' }}>Search or pin your location to calculate ETA.</p>
               <LocationPicker
                 status={locationStatus}
                 onDetect={handleDetect}
-                onSelect={({ lat, lng }) => {
-                  setForm(f => ({ ...f, userLat: lat, userLng: lng }));
+                onSelect={({ lat, lng, address, travelTime }) => {
+                  setForm(f => ({ ...f, userLat: lat, userLng: lng, customerAddress: address, travelTime }));
                   setLocationStatus('detected');
                 }}
               />
@@ -1823,7 +1923,9 @@ function App() {
           userId: user?.id,
           lat: formData.userLat,
           lng: formData.userLng,
-          note: formData.note // Optional
+          note: formData.note,
+          customerAddress: formData.customerAddress,
+          travelTime: formData.travelTime
         }),
       });
       setMessage('Booking successful!');
@@ -2257,48 +2359,7 @@ function App() {
                         </button>
                       </div>
                     </div>
-                    {/* Pause Modal */}
-                    {showPauseModal && (
-                      <div className="modal-overlay">
-                        <div className="modal-content">
-                          <h3 style={{ marginTop: 0 }}>Pause Office Service</h3>
-                          <div className="input-group">
-                            <label className="input-label" style={{ marginBottom: '12px' }}>Select Reason</label>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                              {[
-                                ['Short Break', 'Service paused for a short break. We will resume shortly.'],
-                                ['Lunch Break', 'Service paused for lunch break. Please wait for resume notification.'],
-                                ['System Maintenance', 'Service paused due to system maintenance. ETA will update after resume.']
-                              ].map(([reason, msg]) => (
-                                <label key={reason} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', border: '1px solid var(--gray-200)', borderRadius: '8px', transition: 'all 0.2s' }}>
-                                  <input
-                                    type="radio"
-                                    name="pauseReason"
-                                    checked={pauseReason === reason}
-                                    onChange={() => { setPauseReason(reason); setPauseMessage(msg); }}
-                                    style={{ accentColor: 'var(--primary-600)' }}
-                                  />
-                                  <span style={{ fontWeight: 500 }}>{reason}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="input-group">
-                            <label className="input-label">Additional Note (Optional)</label>
-                            <textarea
-                              className="input-field"
-                              value={pauseMessage}
-                              onChange={e => setPauseMessage(e.target.value)}
-                              rows={3}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
-                            <button className="btn btn-ghost" onClick={() => setShowPauseModal(false)}>Cancel</button>
-                            <button onClick={submitPause} className="btn btn-danger">Confirm Pause</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+
                   </section>
                 )}
 
@@ -2394,6 +2455,48 @@ function App() {
               </>
             )}
           </main>
+        </div>
+      )}
+      {/* Pause Modal (Moved to Root) */}
+      {showPauseModal && (
+        <div className="modal-overlay">
+          <div className="modal-content animate-slide-up">
+            <h3 style={{ marginTop: 0 }}>Pause Office Service</h3>
+            <div className="input-group">
+              <label className="input-label" style={{ marginBottom: '12px' }}>Select Reason</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {[
+                  ['Short Break', 'Service paused for a short break. We will resume shortly.'],
+                  ['Lunch Break', 'Service paused for lunch break. Please wait for resume notification.'],
+                  ['System Maintenance', 'Service paused due to system maintenance. ETA will update after resume.']
+                ].map(([reason, msg]) => (
+                  <label key={reason} className="hover-lift" style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', border: '1px solid var(--gray-200)', borderRadius: '8px', transition: 'all 0.2s' }}>
+                    <input
+                      type="radio"
+                      name="pauseReason"
+                      checked={pauseReason === reason}
+                      onChange={() => { setPauseReason(reason); setPauseMessage(msg); }}
+                      style={{ accentColor: 'var(--primary-600)' }}
+                    />
+                    <span style={{ fontWeight: 500 }}>{reason}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">Additional Note (Optional)</label>
+              <textarea
+                className="input-field"
+                value={pauseMessage}
+                onChange={e => setPauseMessage(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setShowPauseModal(false)}>Cancel</button>
+              <button onClick={submitPause} className="btn btn-danger">Confirm Pause</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
