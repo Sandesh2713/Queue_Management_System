@@ -15,46 +15,50 @@ function CreateOfficeWizard({ onSubmit, onBack }) {
   };
 
   return (
-    <div className="auth-container" style={{ maxWidth: '600px' }}>
-      <h2>Setup your Office</h2>
-      <p style={{ marginBottom: '20px', color: 'var(--gray-500)' }}>Tell us about your organization to get started.</p>
-      <form onSubmit={handleSubmit}>
-        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <label className="field">
-            <span>Office Name</span>
-            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required placeholder="e.g. City Central Clinic" />
-          </label>
-          <label className="field">
-            <span>Services Offered</span>
-            <input value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} required placeholder="e.g. Consultation, X-Ray" />
-          </label>
-        </div>
-        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <label className="field">
-            <span>Avg Service Time (mins)</span>
-            <input type="number" value={form.avgServiceMinutes} onChange={e => setForm({ ...form, avgServiceMinutes: e.target.value })} required />
-          </label>
-          <label className="field">
-            <span>Operating Hours</span>
-            <input value={form.operatingHours} onChange={e => setForm({ ...form, operatingHours: e.target.value })} placeholder="09:00-17:00" required />
-          </label>
-        </div>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+      <div className="card" style={{ width: '100%', maxWidth: '600px' }}>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>Setup your Office</h2>
+        <p style={{ marginBottom: '24px', color: 'var(--text-muted)' }}>Tell us about your organization to get started.</p>
+        <form onSubmit={handleSubmit}>
+          <div className="grid-2">
+            <label className="input-group">
+              <span className="input-label">Office Name</span>
+              <input className="input-field" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required placeholder="e.g. City Central Clinic" />
+            </label>
+            <label className="input-group">
+              <span className="input-label">Services Offered</span>
+              <input className="input-field" value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} required placeholder="e.g. Consultation, X-Ray" />
+            </label>
+          </div>
+          <div className="grid-2">
+            <label className="input-group">
+              <span className="input-label">Avg Service Time (mins)</span>
+              <input className="input-field" type="number" value={form.avgServiceMinutes} onChange={e => setForm({ ...form, avgServiceMinutes: e.target.value })} required />
+            </label>
+            <label className="input-group">
+              <span className="input-label">Operating Hours</span>
+              <input className="input-field" value={form.operatingHours} onChange={e => setForm({ ...form, operatingHours: e.target.value })} placeholder="09:00-17:00" required />
+            </label>
+          </div>
 
-        <label className="field">
-          <span>Daily Capacity (Est.)</span>
-          <input type="number" value={form.dailyCapacity} onChange={e => setForm({ ...form, dailyCapacity: e.target.value })} required />
-        </label>
+          <label className="input-group">
+            <span className="input-label">Daily Capacity (Est.)</span>
+            <input className="input-field" type="number" value={form.dailyCapacity} onChange={e => setForm({ ...form, dailyCapacity: e.target.value })} required />
+          </label>
 
-        <label className="field" style={{ marginTop: '16px' }}>
-          <span>Number of Counters (N)</span>
-          <input type="number" value={form.counterCount} onChange={e => setForm({ ...form, counterCount: e.target.value })} required min="1" max="10" />
-          <div style={{ fontSize: '12px', color: 'gray' }}>M = N * 3 (Max Allocations)</div>
-        </label>
+          <label className="input-group">
+            <span className="input-label">Number of Counters (N)</span>
+            <input className="input-field" type="number" value={form.counterCount} onChange={e => setForm({ ...form, counterCount: e.target.value })} required min="1" max="10" />
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>M = N * 3 (Max Allocations)</div>
+          </label>
 
-        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-          <button type="submit" disabled={loading} style={{ width: '100%' }}>{loading ? 'Creating...' : 'Create Office'}</button>
-        </div>
-      </form>
+          <div style={{ marginTop: '32px' }}>
+            <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>
+              {loading ? 'Creating...' : 'Create Office'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -142,23 +146,32 @@ function CustomerTokenRow({ token, onCancel, onArrive, isOwner, office }) {
   }
 
   return (
-    <div className={`token-row ${token.status}`}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div className="token-label">Token #{token.token_number}</div>
-        <div className="token-meta">
-          {token.user_name}
-          <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginTop: '4px' }}>{statusMsg}</div>
-          <div style={{ fontSize: '12px', marginTop: '2px' }}>{subMsg}</div>
+    <div className={`token-row ${token.status}`} style={{
+      background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)',
+      borderRadius: 'var(--radius-lg)', padding: '20px', marginBottom: '16px',
+      boxShadow: 'var(--shadow-sm)', border: '1px solid var(--gray-100)',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary-600)' }}>Token #{token.token_number}</div>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{token.user_name}</div>
+          <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="badge badge-neutral">{statusMsg}</span>
+          </div>
+          <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '6px' }}>{subMsg}</div>
         </div>
       </div>
-      <div className="token-actions">
+      <div className="token-actions" style={{ display: 'flex', gap: '12px' }}>
         {token.status === 'ALLOCATED' && !isArrived && isOwner && (
-          <button className="primary-btn small" onClick={() => onArrive(token.id)} style={{ padding: '6px 12px' }}>
+          <button className="btn btn-primary" onClick={() => onArrive(token.id)}>
             I've Arrived
           </button>
         )}
         {!isTerminal && isOwner && (
-          <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
+          <button className="btn btn-danger" style={{ background: 'transparent', color: '#ef4444', border: '1px solid #fee2e2' }} onClick={() => onCancel(token.id)}>
+            Cancel
+          </button>
         )}
       </div>
     </div>
@@ -182,39 +195,39 @@ function AdminTokenRow({ token, onComplete, onNoShow, onCancel, onReQueue, onSel
   };
 
   return (
-    <div className="token-row" style={{ alignItems: 'center' }} onClick={() => onSelect(token)}>
+    <div onClick={() => onSelect(token)} style={{
+      background: 'white', borderRadius: 'var(--radius-md)', padding: '16px', marginBottom: '12px',
+      boxShadow: 'var(--shadow-sm)', border: '1px solid var(--gray-200)',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      cursor: 'pointer', transition: 'all 0.2s', position: 'relative', overflow: 'hidden'
+    }}
+      onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+      onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+    >
       <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="token-label" style={{ fontSize: '16px' }}>#{token.token_number}</span>
-          <span style={{ fontSize: '14px', fontWeight: 600 }}>{token.user_name}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary-600)' }}>#{token.token_number}</span>
+          <span style={{ fontSize: '1rem', fontWeight: 600 }}>{token.user_name}</span>
         </div>
-        <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-          <span style={{
-            fontSize: '11px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase',
-            backgroundColor: getStatusColor(token.status), color: '#374151'
-          }}>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          <span className="badge" style={{ backgroundColor: getStatusColor(token.status), color: '#374151' }}>
             {token.status}
           </span>
-          <span style={{
-            fontSize: '11px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold',
-            backgroundColor: isArrived ? '#dcfce7' : '#fee2e2',
-            color: isArrived ? '#166534' : '#991b1b'
-          }}>
-            {isArrived ? 'ARRIVED' : 'NOT ARRIVED'}
+          <span className="badge" style={{ backgroundColor: isArrived ? '#dcfce7' : '#fee2e2', color: isArrived ? '#166534' : '#991b1b' }}>
+            {isArrived ? 'Arrived' : 'Not Arrived'}
           </span>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="token-actions" onClick={e => e.stopPropagation()}>
+      <div className="token-actions" onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: '8px' }}>
         {!isTerminal && !isHolding && (
           <>
-            <button className="ghost small" onClick={() => onComplete(token.id)}>Done</button>
-            <button className="ghost small" onClick={() => onNoShow(token.id)}>No-show</button>
-            <button className="ghost danger small" onClick={() => onCancel(token.id)}>✖</button>
+            <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => onComplete(token.id)}>Done</button>
+            <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => onNoShow(token.id)}>No-show</button>
+            <button className="btn btn-ghost" style={{ color: 'var(--danger)', padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => onCancel(token.id)}>✕</button>
           </>
         )}
-        {isHolding && <button className="ghost small" onClick={() => onReQueue(token.id)}>ReQ</button>}
+        {isHolding && <button className="btn btn-secondary" onClick={() => onReQueue(token.id)}>ReQ</button>}
       </div>
     </div>
   );
@@ -233,8 +246,8 @@ function TokenDetailsModal({ token, onClose, onAction }) {
   );
 
   return (
-    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
-      <div className="modal-content" style={{ background: '#fff', padding: '24px', borderRadius: '16px', width: '400px', maxWidth: '90vw' }}>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3>Token #{token.token_number}</h3>
           <button className="ghost" onClick={onClose}>✕</button>
@@ -1207,80 +1220,63 @@ const ProfileMenu = ({ user, onNavigate, onLogout }) => {
 
 const ProfileView = ({ user, onBack, office }) => {
   return (
-    <div className="panel" style={{ maxWidth: '600px', margin: '40px auto' }}>
+    <div className="card" style={{ maxWidth: '600px', margin: '40px auto' }}>
       <div className="panel-header">
         <h3>Profile Details</h3>
-        <button className="ghost" onClick={onBack}>Back</button>
+        <button className="btn btn-ghost" onClick={onBack}>Back</button>
       </div>
-      <div className="field-grid" style={{ gridTemplateColumns: '1fr', gap: '24px' }}>
+      <div style={{ display: 'grid', gap: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', paddingBottom: '20px', borderBottom: '1px solid var(--gray-200)' }}>
-          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary-600)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold', boxShadow: 'var(--shadow-md)' }}>
             {user.name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>{user.name}</div>
-            <div className="token-chip" style={{ display: 'inline-block' }}>{user.role}</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '4px' }}>{user.name}</div>
+            <div className="badge badge-neutral">{user.role}</div>
           </div>
         </div>
-        <div style={{ display: 'grid', gap: '16px' }}>
-          <div className="info-row">
-            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Email Address</label>
-            <div style={{ fontSize: '16px' }}>{user.email}</div>
+
+        <div className="grid-2">
+          <div className="input-group">
+            <label className="input-label">Email Address</label>
+            <div style={{ fontSize: '1rem' }}>{user.email}</div>
           </div>
-          <div className="info-row">
-            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Phone Number</label>
-            <div style={{ fontSize: '16px' }}>{user.phone || 'Not provided'}</div>
-          </div>
-        </div>
-        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div className="info-row">
-            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Date of Birth</label>
-            <div style={{ fontSize: '16px' }}>{user.dob ? new Date(user.dob).toLocaleDateString() : 'N/A'}</div>
-          </div>
-          <div className="info-row">
-            <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Age</label>
-            <div style={{ fontSize: '16px' }}>{user.age || 'N/A'}</div>
+          <div className="input-group">
+            <label className="input-label">Phone Number</label>
+            <div style={{ fontSize: '1rem' }}>{user.phone || 'Not provided'}</div>
           </div>
         </div>
-        <div className="info-row">
-          <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Gender</label>
-          <div style={{ fontSize: '16px' }}>{user.gender || 'Not provided'}</div>
+
+        <div className="grid-2">
+          <div className="input-group">
+            <label className="input-label">Date of Birth</label>
+            <div style={{ fontSize: '1rem' }}>{user.dob ? new Date(user.dob).toLocaleDateString() : 'N/A'}</div>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Age</label>
+            <div style={{ fontSize: '1rem' }}>{user.age || 'N/A'}</div>
+          </div>
         </div>
-        <div className="info-row">
-          <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Member Since</label>
-          <div style={{ fontSize: '16px' }}>{new Date(user.created_at).toLocaleDateString()}</div>
+
+        <div className="input-group">
+          <label className="input-label">Gender</label>
+          <div style={{ fontSize: '1rem' }}>{user.gender || 'Not provided'}</div>
         </div>
 
         {user.role === 'admin' && office && (
-          <>
-            <div style={{ height: '1px', background: 'var(--gray-200)', margin: '8px 0' }} />
-            <h4 style={{ marginBottom: '12px', color: 'var(--gray-900)' }}>Office Details</h4>
-
-            <div className="info-row">
-              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Office Name</label>
-              <div style={{ fontSize: '16px' }}>{office.name}</div>
-            </div>
-            <div className="info-row">
-              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Working Hours</label>
-              <div style={{ fontSize: '16px' }}>{office.operating_hours || office.operatingHours || 'Not set'}</div>
-            </div>
-            <div className="info-row">
-              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Service Time</label>
-              <div style={{ fontSize: '16px' }}>{office.avg_service_minutes} mins</div>
-            </div>
-            <div className="info-row">
-              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Services Offered</label>
-              <div style={{ fontSize: '16px' }}>{office.service_type}</div>
-            </div>
-            <div className="info-row">
-              <label style={{ fontSize: '13px', color: 'var(--gray-500)', display: 'block', marginBottom: '4px' }}>Location</label>
-              <div style={{ fontSize: '16px' }}>
-                {office.latitude && office.longitude
-                  ? `${Number(office.latitude).toFixed(4)}, ${Number(office.longitude).toFixed(4)}`
-                  : 'Not set'}
+          <div style={{ background: 'var(--gray-50)', padding: '16px', borderRadius: 'var(--radius-md)' }}>
+            <h4 style={{ marginBottom: '16px', color: 'var(--primary-700)' }}>Office Details</h4>
+            <div className="grid-2">
+              <div className="input-group">
+                <label className="input-label">Name</label>
+                <div>{office.name}</div>
+              </div>
+              <div className="input-group">
+                <label className="input-label">Service Time</label>
+                <div>{office.avg_service_minutes} mins</div>
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -1342,49 +1338,50 @@ const SettingsView = ({ user, onBack, adminKey, selectedOfficeId }) => {
   }
 
   return (
-    <div className="panel" style={{ maxWidth: '600px', margin: '40px auto' }}>
+    <div className="card" style={{ maxWidth: '600px', margin: '40px auto' }}>
       <div className="panel-header">
         <h3>Admin Settings</h3>
-        <button className="ghost" onClick={onBack}>Back</button>
+        <button className="btn btn-ghost" onClick={onBack}>Back</button>
       </div>
 
-      {message && <div className="message" style={{ marginBottom: '16px' }}>{message}</div>}
+      {message && <div className="badge badge-success" style={{ marginBottom: '16px', display: 'block', width: 'fit-content' }}>{message}</div>}
 
-      <div className="panel-section">
-        <h4>History Retention</h4>
-        <p style={{ fontSize: '14px', color: 'var(--gray-500)', marginBottom: '12px' }}>
+      <div style={{ marginBottom: '32px' }}>
+        <h4 style={{ marginBottom: '8px' }}>History Retention</h4>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
           Automatically delete token history older than the selected period.
         </p>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <select
             value={retention}
             onChange={e => setRetention(e.target.value)}
-            style={{ padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', flex: 1 }}
+            className="input-field"
+            style={{ flex: 1 }}
           >
             <option value="7">7 Days</option>
             <option value="14">14 Days</option>
             <option value="30">30 Days</option>
           </select>
-          <button onClick={handleSaveRetention} disabled={loading}>Save</button>
+          <button className="btn btn-secondary" onClick={handleSaveRetention} disabled={loading}>Save</button>
         </div>
       </div>
 
-      <div className="panel-section" style={{ borderTop: '1px solid var(--gray-200)', marginTop: '24px', paddingTop: '24px' }}>
-        <h4>Export Data</h4>
-        <p style={{ fontSize: '14px', color: 'var(--gray-500)', marginBottom: '12px' }}>
+      <div style={{ borderTop: '1px solid var(--gray-200)', paddingTop: '24px' }}>
+        <h4 style={{ marginBottom: '8px' }}>Export Data</h4>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
           Download token history as an Excel file.
         </p>
-        <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-          <label className="field">
-            <span>From</span>
-            <input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} />
+        <div className="grid-2" style={{ marginBottom: '16px' }}>
+          <label className="input-group">
+            <span className="input-label">From</span>
+            <input className="input-field" type="date" value={exportStart} onChange={e => setExportStart(e.target.value)} />
           </label>
-          <label className="field">
-            <span>To</span>
-            <input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} />
+          <label className="input-group">
+            <span className="input-label">To</span>
+            <input className="input-field" type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)} />
           </label>
         </div>
-        <button className="secondary-btn" onClick={handleExport} disabled={loading} style={{ width: '100%' }}>
+        <button className="btn btn-primary" onClick={handleExport} disabled={loading} style={{ width: '100%' }}>
           {loading ? 'Processing...' : 'Download Excel Report'}
         </button>
       </div>
@@ -1418,24 +1415,24 @@ const HistoryView = ({ user, onBack, adminKey, selectedOfficeId }) => {
   };
 
   return (
-    <div className="panel" style={{ maxWidth: '800px', margin: '40px auto' }}>
+    <div className="card" style={{ maxWidth: '800px', margin: '40px auto' }}>
       <div className="panel-header">
         <h3>Token Archives</h3>
-        <button className="ghost" onClick={onBack}>Back</button>
+        <button className="btn btn-ghost" onClick={onBack}>Back</button>
       </div>
 
-      <div className="field-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
-        <label className="field">
-          <span>From</span>
-          <input type="date" value={start} onChange={e => setStart(e.target.value)} />
+      <div className="grid-3" style={{ marginBottom: '20px' }}>
+        <label className="input-group">
+          <span className="input-label">From</span>
+          <input className="input-field" type="date" value={start} onChange={e => setStart(e.target.value)} />
         </label>
-        <label className="field">
-          <span>To</span>
-          <input type="date" value={end} onChange={e => setEnd(e.target.value)} />
+        <label className="input-group">
+          <span className="input-label">To</span>
+          <input className="input-field" type="date" value={end} onChange={e => setEnd(e.target.value)} />
         </label>
-        <label className="field">
-          <span>Status</span>
-          <select value={status} onChange={e => setStatus(e.target.value)}>
+        <label className="input-group">
+          <span className="input-label">Status</span>
+          <select className="input-field" value={status} onChange={e => setStatus(e.target.value)}>
             <option value="all">All</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
@@ -1445,20 +1442,23 @@ const HistoryView = ({ user, onBack, adminKey, selectedOfficeId }) => {
       </div>
 
       <div className="token-list" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-        {loading && <div style={{ padding: '20px', textAlign: 'center', color: 'var(--gray-500)' }}>Loading records...</div>}
+        {loading && <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading records...</div>}
         {!loading && history.length === 0 && (
-          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--gray-500)' }}>No archived records found for this range.</div>
+          <div className="empty-state" style={{ padding: '40px' }}>No archived records found for this range.</div>
         )}
         {history.map(t => (
-          <div key={t.id} className="token-row" style={{ opacity: 0.8 }}>
+          <div key={t.id} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '16px', borderBottom: '1px solid var(--gray-100)'
+          }}>
             <div>
-              <div className="token-label">#{t.token_number} - {t.user_name}</div>
-              <div className="token-meta">
-                {new Date(t.created_at).toLocaleDateString()} · {t.service_type} · {t.status}
+              <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--primary-700)' }}>#{t.token_number} - {t.user_name}</div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                {new Date(t.created_at).toLocaleDateString()} · {t.service_type} · <span className="badge badge-neutral">{t.status}</span>
               </div>
             </div>
-            <div className="token-actions">
-              <span className="token-chip">{new Date(t.archived_at).toLocaleDateString()}</span>
+            <div className="badge badge-neutral" style={{ fontSize: '0.8rem' }}>
+              Archived: {new Date(t.archived_at).toLocaleDateString()}
             </div>
           </div>
         ))}
@@ -1917,11 +1917,11 @@ function App() {
       ) : view === 'settings' ? (
         <SettingsView onBack={() => setView(user.role === 'admin' ? 'admin' : 'customer')} />
       ) : (
-        <div className="layout">
-          <aside className="panel">
+        <div className="dashboard-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 300px) 1fr', gap: '24px', alignItems: 'start' }}>
+          <aside className="card" style={{ padding: '24px', height: 'fit-content' }}>
             <div className="view-toggle" style={{ marginBottom: 20 }}>
               {/* Role-based: show only relevant view or both if dual-role (simplified to strict separation) */}
-              <div className="eyebrow" style={{ marginBottom: 0 }}>Logged in as {user.role}</div>
+              <div style={{ textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--primary-600)', letterSpacing: '0.05em' }}>Logged in as {user.role}</div>
             </div>
 
             <div className="panel-header">
@@ -1979,12 +1979,12 @@ function App() {
             )}
           </aside>
 
-          <main className="panel">
+          <main style={{ display: 'flex', flexDirection: 'column' }}>
             {showHistory && view === 'admin' ? (
-              <div className="history-view">
+              <div className="card history-view">
                 <div className="panel-header">
                   <h3>Token History</h3>
-                  <button className="ghost" onClick={() => setShowHistory(false)}>Close</button>
+                  <button className="btn btn-ghost" onClick={() => setShowHistory(false)}>Close</button>
                 </div>
                 <div className="token-list">
                   {historyTokens.length === 0 && <div className="muted" style={{ padding: 20 }}>No archived tokens found.</div>}
@@ -2005,39 +2005,45 @@ function App() {
               </div>
             ) : !selectedOffice ? <div className="muted">Select office</div> : (
               <>
-                <div className="panel-header">
-                  <h3>{selectedOffice.name}</h3>
-                  <div className="stat-group">
-                    {view === 'admin' && (
-                      <button className="ghost small" onClick={() => setView('history')} style={{ marginRight: 'auto' }}>View Archives</button>
-                    )}
-                    {view === 'admin' ? (
-                      <Stat label="Current Token" value={
-                        (selectedOfficeData?.tokens || [])
-                          .filter(t => t.status === 'called')
-                          .sort((a, b) => (new Date(b.called_at || 0) - new Date(a.called_at || 0)))[0]?.token_number || '--'
-                      } />
-                    ) : (
-                      <Stat label="Wait" value={
-                        (selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes)) > 0
-                          ? `${Math.round(selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes))}m`
-                          : 'Access Allowed'
-                      } />
-                    )}
-                    <Stat label="Avail" value={selectedOffice.available_today} />
-                    {view === 'admin' && (
-                      <Stat label="Velocity" value={`${Math.round((selectedOffice.counter_count || 1) / (selectedOffice.average_velocity || 5))} t/m`} />
-                    )}
+                <section className="card" style={{ marginBottom: '24px' }}>
+                  <div className="panel-header">
+                    <h3>{selectedOffice.name}</h3>
+                    <div className="stat-group">
+                      {view === 'admin' && (
+                        <button className="btn btn-ghost small" onClick={() => setView('history')} style={{ marginRight: 'auto' }}>View Archives</button>
+                      )}
+                      {view === 'admin' ? (
+                        <Stat label="Current Token" value={
+                          (selectedOfficeData?.tokens || [])
+                            .filter(t => t.status === 'called')
+                            .sort((a, b) => (new Date(b.called_at || 0) - new Date(a.called_at || 0)))[0]?.token_number || '--'
+                        } />
+                      ) : (
+                        <Stat label="Wait" value={
+                          (selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes)) > 0
+                            ? `${Math.round(selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes))}m`
+                            : 'Access Allowed'
+                        } />
+                      )}
+                      <Stat label="Avail" value={selectedOffice.available_today} />
+                      {view === 'admin' && (
+                        <Stat label="Velocity" value={`${Math.round((selectedOffice.counter_count || 1) / (selectedOffice.average_velocity || 5))} t/m`} />
+                      )}
+                    </div>
                   </div>
-                </div>
+                </section>
 
                 {view === 'customer' && (
-                  <section className="panel-section">
-                    <h4>Book Slot</h4>
-                    <p style={{ fontSize: '14px', color: 'var(--gray-500)' }}>
-                      {selectedOffice.available_today > 0 ? 'Slots available immediately.' : `Current wait: approx ${Math.round(selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes))} mins.`}
-                    </p>
-                    <button onClick={() => setIsBookingModalOpen(true)}>Book Now</button>
+                  <section className="card" style={{ marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h4 style={{ fontSize: '1.2rem' }}>Book a Slot</h4>
+                        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          {selectedOffice.available_today > 0 ? 'Slots available immediately.' : `Current wait: approx ${Math.round(selectedOffice.queueCount * (selectedOffice.average_velocity || selectedOffice.avg_service_minutes))} mins.`}
+                        </p>
+                      </div>
+                      <button className="btn btn-primary" onClick={() => setIsBookingModalOpen(true)}>Book Now</button>
+                    </div>
                   </section>
                 )}
 
@@ -2050,18 +2056,19 @@ function App() {
                 />
 
                 {view === 'admin' && (
-                  <section className="panel-section">
-                    <h4>Admin Controls</h4>
+                  <section className="card" style={{ marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Admin Controls</h4>
                     <div className="admin-controls-grid">
-                      <div className="field-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: 0 }}>
-                        <label className="field">
-                          <span>Availability</span>
-                          <input type="number" value={availabilityInput} onChange={e => setAvailabilityInput(e.target.value)} />
-                        </label>
-                        <label className="field" style={{ position: 'relative' }}>
-                          <span>Admin Key</span>
+                      <div className="grid-2" style={{ marginBottom: '16px' }}>
+                        <div className="input-group">
+                          <span className="input-label">Availability</span>
+                          <input className="input-field" type="number" value={availabilityInput} onChange={e => setAvailabilityInput(e.target.value)} />
+                        </div>
+                        <div className="input-group" style={{ position: 'relative' }}>
+                          <span className="input-label">Admin Key</span>
                           <div style={{ position: 'relative' }}>
                             <input
+                              className="input-field"
                               type={showAdminKey ? 'text' : 'password'}
                               value={adminKey}
                               onChange={e => setAdminKey(e.target.value)}
@@ -2069,28 +2076,19 @@ function App() {
                               style={{ paddingRight: '40px' }}
                             />
                             <button
-                              className="ghost"
+                              className="btn btn-ghost"
                               onClick={() => setShowAdminKey(!showAdminKey)}
-                              style={{
-                                position: 'absolute',
-                                right: '4px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                padding: '4px 8px',
-                                height: 'auto',
-                                minWidth: 'auto',
-                                color: 'var(--gray-500)'
-                              }}
+                              style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', padding: '4px 8px' }}
                             >
                               {showAdminKey ? 'Hide' : 'Show'}
                             </button>
                           </div>
-                        </label>
+                        </div>
                       </div>
-                      <div className="button-group">
-                        <button onClick={handleAvailabilityUpdate} className="secondary-btn" style={{ background: 'var(--gray-200)', color: 'var(--gray-900)' }}>Update</button>
-                        <button onClick={callNext} disabled={selectedOffice.is_paused || (selectedOfficeData?.tokens || []).filter(t => t.status === 'CALLED').length >= (selectedOffice.counter_count || 1)} className="primary-btn">Call Next</button>
-                        <button onClick={handlePauseToggle} className={selectedOffice.is_paused ? 'ghost danger' : 'ghost'} style={{ border: '1px solid currentColor' }}>
+                      <div className="flex gap-2" style={{ display: 'flex', gap: '12px' }}>
+                        <button onClick={handleAvailabilityUpdate} className="btn btn-secondary">Update</button>
+                        <button onClick={callNext} disabled={selectedOffice.is_paused || (selectedOfficeData?.tokens || []).filter(t => t.status === 'CALLED').length >= (selectedOffice.counter_count || 1)} className="btn btn-primary">Call Next</button>
+                        <button onClick={handlePauseToggle} className={`btn ${selectedOffice.is_paused ? 'btn-danger' : 'btn-secondary'}`}>
                           {selectedOffice.is_paused ? 'Resume' : 'Pause'}
                         </button>
                       </div>
@@ -2098,40 +2096,41 @@ function App() {
                     {/* Pause Modal */}
                     {showPauseModal && (
                       <div className="modal-overlay">
-                        <div className="modal-content" style={{ width: '400px', maxWidth: '90vw' }}>
+                        <div className="modal-content">
                           <h3 style={{ marginTop: 0 }}>Pause Office Service</h3>
-                          <div className="field" style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Select Reason</label>
+                          <div className="input-group">
+                            <label className="input-label" style={{ marginBottom: '12px' }}>Select Reason</label>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                               {[
                                 ['Short Break', 'Service paused for a short break. We will resume shortly.'],
                                 ['Lunch Break', 'Service paused for lunch break. Please wait for resume notification.'],
                                 ['System Maintenance', 'Service paused due to system maintenance. ETA will update after resume.']
                               ].map(([reason, msg]) => (
-                                <label key={reason} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '8px', border: '1px solid var(--gray-300)', borderRadius: '8px' }}>
+                                <label key={reason} style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', border: '1px solid var(--gray-200)', borderRadius: '8px', transition: 'all 0.2s' }}>
                                   <input
                                     type="radio"
                                     name="pauseReason"
                                     checked={pauseReason === reason}
                                     onChange={() => { setPauseReason(reason); setPauseMessage(msg); }}
+                                    style={{ accentColor: 'var(--primary-600)' }}
                                   />
                                   <span style={{ fontWeight: 500 }}>{reason}</span>
                                 </label>
                               ))}
                             </div>
                           </div>
-                          <div className="field">
-                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Additional Note (Optional)</label>
+                          <div className="input-group">
+                            <label className="input-label">Additional Note (Optional)</label>
                             <textarea
+                              className="input-field"
                               value={pauseMessage}
                               onChange={e => setPauseMessage(e.target.value)}
                               rows={3}
-                              style={{ width: '100%', borderRadius: '8px', padding: '12px', marginTop: '4px', border: '1px solid var(--gray-300)' }}
                             />
                           </div>
                           <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
-                            <button className="ghost" onClick={() => setShowPauseModal(false)}>Cancel</button>
-                            <button onClick={submitPause} className="danger">Confirm Pause</button>
+                            <button className="btn btn-ghost" onClick={() => setShowPauseModal(false)}>Cancel</button>
+                            <button onClick={submitPause} className="btn btn-danger">Confirm Pause</button>
                           </div>
                         </div>
                       </div>
@@ -2139,28 +2138,43 @@ function App() {
                   </section>
                 )}
 
-                <section className="panel-section">
-                  <h4>Queue Status</h4>
+                <section className="card">
+                  <h4 style={{ fontSize: '1.1rem', marginBottom: '16px' }}>Queue Status</h4>
                   {/* Enable tabs for both customer and admin */}
                   {(view === 'customer' || view === 'admin') && (
-                    <div className="tabs" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                    <div className="tabs" style={{ display: 'flex', gap: '8px', marginBottom: '20px', background: 'var(--gray-50)', padding: '4px', borderRadius: 'var(--radius-md)', width: 'fit-content' }}>
                       <button
-                        className={tokenFilter === 'pending' ? 'primary small' : 'ghost small'}
-                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'pending' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'pending' ? '#fff' : 'inherit' }}
+                        className="btn"
+                        style={{
+                          padding: '6px 16px', borderRadius: '8px', fontSize: '0.9rem',
+                          background: tokenFilter === 'pending' ? 'white' : 'transparent',
+                          color: tokenFilter === 'pending' ? 'var(--primary-600)' : 'var(--text-muted)',
+                          boxShadow: tokenFilter === 'pending' ? 'var(--shadow-sm)' : 'none'
+                        }}
                         onClick={() => setTokenFilter('pending')}
                       >
                         Pending
                       </button>
                       <button
-                        className={tokenFilter === 'completed' ? 'primary small' : 'ghost small'}
-                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'completed' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'completed' ? '#fff' : 'inherit' }}
+                        className="btn"
+                        style={{
+                          padding: '6px 16px', borderRadius: '8px', fontSize: '0.9rem',
+                          background: tokenFilter === 'completed' ? 'white' : 'transparent',
+                          color: tokenFilter === 'completed' ? 'var(--primary-600)' : 'var(--text-muted)',
+                          boxShadow: tokenFilter === 'completed' ? 'var(--shadow-sm)' : 'none'
+                        }}
                         onClick={() => setTokenFilter('completed')}
                       >
                         Completed
                       </button>
                       <button
-                        className={tokenFilter === 'cancelled' ? 'primary small' : 'ghost small'}
-                        style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--gray-300)', background: tokenFilter === 'cancelled' ? 'var(--primary)' : 'transparent', color: tokenFilter === 'cancelled' ? '#fff' : 'inherit' }}
+                        className="btn"
+                        style={{
+                          padding: '6px 16px', borderRadius: '8px', fontSize: '0.9rem',
+                          background: tokenFilter === 'cancelled' ? 'white' : 'transparent',
+                          color: tokenFilter === 'cancelled' ? 'var(--primary-600)' : 'var(--text-muted)',
+                          boxShadow: tokenFilter === 'cancelled' ? 'var(--shadow-sm)' : 'none'
+                        }}
                         onClick={() => setTokenFilter('cancelled')}
                       >
                         Cancelled
@@ -2204,8 +2218,9 @@ function App() {
                       if (tokenFilter === 'cancelled') return ['cancelled', 'no-show', 'history'].includes(t.status);
                       return false;
                     }).length === 0 && (
-                        <div className="muted" style={{ textAlign: 'center', padding: '20px' }}>
-                          No tokens found in {tokenFilter} section.
+                        <div className="empty-state">
+                          <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🌱</div>
+                          No tokens found in "{tokenFilter}" section.
                         </div>
                       )}
                   </div>
