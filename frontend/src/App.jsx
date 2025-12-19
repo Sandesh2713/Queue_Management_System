@@ -81,23 +81,19 @@ function Stat({ label, value }) {
   );
 }
 
-function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, onArrive, isAdmin, currentUser, office }) {
-  const isOwner = currentUser?.id === token.user_id;
-  const isTerminal = ['cancelled', 'completed', 'no-show'].includes(token.status);
-  const isHolding = token.status === 'holding';
+// --- 1. Customer Token Row (Instructions & Guidance) ---
+function CustomerTokenRow({ token, onCancel, onArrive, isOwner, office }) {
   const isArrived = token.presence_status === 'ARRIVED';
-
-  // Constants
+  const isTerminal = ['cancelled', 'completed', 'no-show'].includes(token.status);
   const N = office?.counter_count || 1;
   const serviceMinutes = office?.avg_service_minutes || 10;
 
   let statusMsg = token.status;
   let subMsg = '';
 
-  // Format Helper
   const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // --- Strict Customer Display Logic ---
+  // STRICT Customer Logic
   if (office?.is_paused && ['WAIT', 'ALLOCATED'].includes(token.status)) {
     statusMsg = 'Paused';
     subMsg = office.pause_message || `Service paused: ${office.pause_reason}`;
@@ -113,27 +109,21 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, onArrive, 
       subMsg = 'You are allowed to enter the office. Please confirm arrival.';
     }
   } else if (token.status === 'WAIT') {
-    // SCENARIO 4 (Extended Wait / Remote)
     if (token.time_state === 'PAST' || !token.service_start_time) {
       statusMsg = 'Be Ready';
       subMsg = (
-        <div style={{ color: 'var(--primary)', fontWeight: 600 }}>
-          Please be ready, your turn is approaching.
-        </div>
+        <div style={{ color: 'var(--primary)', fontWeight: 600 }}>Please be ready, your turn is approaching.</div>
       );
     } else {
       statusMsg = 'Wait at Location';
       const callTimeMs = new Date(token.service_start_time).getTime();
-
-      // Relative Time First
       const minsToCall = Math.ceil((callTimeMs - Date.now()) / 60000);
       const callRel = minsToCall > 0 ? `In ${minsToCall} mins` : 'Very soon';
 
       const allocOffset = 3 * serviceMinutes * 60000;
       const travelOffset = (token.travel_time_minutes || 15) * 60000;
-
       let allocTimeMs = callTimeMs - allocOffset;
-      if (allocTimeMs < Date.now()) allocTimeMs = Date.now(); // Clamp
+      if (allocTimeMs < Date.now()) allocTimeMs = Date.now();
       const travelStartMs = allocTimeMs - travelOffset;
       const travelStr = fmtTime(new Date(travelStartMs));
 
@@ -148,25 +138,13 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, onArrive, 
     statusMsg = 'Completed';
     subMsg = 'Thank you for visiting';
   } else {
-    // Cancelled etc
     subMsg = '-';
   }
 
   return (
     <div className={`token-row ${token.status}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="token-label">Token #{token.token_number}</div>
-          {isAdmin && (
-            <span style={{
-              fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold',
-              backgroundColor: isArrived ? '#dcfce7' : '#f3f4f6',
-              color: isArrived ? '#166534' : '#6b7280'
-            }}>
-              {isArrived ? 'ARRIVED' : 'NOT ARRIVED'}
-            </span>
-          )}
-        </div>
+        <div className="token-label">Token #{token.token_number}</div>
         <div className="token-meta">
           {token.user_name}
           <div style={{ fontWeight: 'bold', color: 'var(--primary)', marginTop: '4px' }}>{statusMsg}</div>
@@ -174,29 +152,118 @@ function TokenRow({ token, onCancel, onComplete, onNoShow, onReQueue, onArrive, 
         </div>
       </div>
       <div className="token-actions">
-        {/* Customer Arrive Button */}
         {token.status === 'ALLOCATED' && !isArrived && isOwner && (
           <button className="primary-btn small" onClick={() => onArrive(token.id)} style={{ padding: '6px 12px' }}>
             I've Arrived
           </button>
         )}
+        {!isTerminal && isOwner && (
+          <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
+        )}
+      </div>
+    </div>
+  );
+}
 
+// --- 2. Admin Token Row (Raw System Data) ---
+function AdminTokenRow({ token, onComplete, onNoShow, onCancel, onReQueue, onSelect }) {
+  const isArrived = token.presence_status === 'ARRIVED';
+  const isTerminal = ['cancelled', 'completed', 'no-show'].includes(token.status);
+  const isHolding = token.status === 'holding';
+
+  // Status Badge Logic
+  const getStatusColor = (s) => {
+    switch (s) {
+      case 'CALLED': return '#dcfce7'; // green-100
+      case 'ALLOCATED': return '#fef9c3'; // yellow-100
+      case 'WAIT': return '#e0f2fe'; // sky-100
+      default: return '#f3f4f6'; // gray-100
+    }
+  };
+
+  return (
+    <div className="token-row" style={{ alignItems: 'center' }} onClick={() => onSelect(token)}>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="token-label" style={{ fontSize: '16px' }}>#{token.token_number}</span>
+          <span style={{ fontSize: '14px', fontWeight: 600 }}>{token.user_name}</span>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+          <span style={{
+            fontSize: '11px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase',
+            backgroundColor: getStatusColor(token.status), color: '#374151'
+          }}>
+            {token.status}
+          </span>
+          <span style={{
+            fontSize: '11px', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold',
+            backgroundColor: isArrived ? '#dcfce7' : '#fee2e2',
+            color: isArrived ? '#166534' : '#991b1b'
+          }}>
+            {isArrived ? 'ARRIVED' : 'NOT ARRIVED'}
+          </span>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="token-actions" onClick={e => e.stopPropagation()}>
         {!isTerminal && !isHolding && (
           <>
-            {isAdmin && (
-              <>
-                <button className="ghost" onClick={() => onComplete(token.id)}>Complete</button>
-                <button className="ghost" onClick={() => onNoShow(token.id)}>No-show</button>
-              </>
-            )}
-            {(isAdmin || isOwner) && (
-              <button className="ghost danger" onClick={() => onCancel(token.id)}>Cancel</button>
-            )}
+            <button className="ghost small" onClick={() => onComplete(token.id)}>Done</button>
+            <button className="ghost small" onClick={() => onNoShow(token.id)}>No-show</button>
+            <button className="ghost danger small" onClick={() => onCancel(token.id)}>✖</button>
           </>
         )}
-        {isHolding && isAdmin && (
-          <button className="ghost" onClick={() => onReQueue(token.id)}>Re-Queue</button>
-        )}
+        {isHolding && <button className="ghost small" onClick={() => onReQueue(token.id)}>ReQ</button>}
+      </div>
+    </div>
+  );
+}
+
+// --- 3. Token Details Modal (Admin Only) ---
+function TokenDetailsModal({ token, onClose, onAction }) {
+  if (!token) return null;
+  const isArrived = token.presence_status === 'ARRIVED';
+
+  const InfoRow = ({ label, val }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '1px solid #f3f4f6', paddingBottom: '4px' }}>
+      <span style={{ color: '#6b7280', fontSize: '13px' }}>{label}</span>
+      <span style={{ fontWeight: 500, fontSize: '13px' }}>{val || '-'}</span>
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+      <div className="modal-content" style={{ background: '#fff', padding: '24px', borderRadius: '16px', width: '400px', maxWidth: '90vw' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3>Token #{token.token_number}</h3>
+          <button className="ghost" onClick={onClose}>✕</button>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <h4 style={{ fontSize: '12px', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '8px' }}>Customer</h4>
+          <InfoRow label="Name" val={token.user_name} />
+          <InfoRow label="Email" val={token.user_email} />
+          <InfoRow label="Phone" val={token.user_phone} />
+          <InfoRow label="Gender" val={token.user_gender} />
+          <InfoRow label="DOB" val={token.user_dob ? new Date(token.user_dob).toLocaleDateString() : ''} />
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <h4 style={{ fontSize: '12px', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '8px' }}>System Data</h4>
+          <InfoRow label="Status" val={token.status} />
+          <InfoRow label="Presence" val={token.presence_status} />
+          <InfoRow label="Created At" val={token.created_at ? new Date(token.created_at).toLocaleString() : ''} />
+          <InfoRow label="Allocation Time" val={token.eligibility_time ? new Date(token.eligibility_time).toLocaleString() : ''} />
+          <InfoRow label="Service Start" val={token.service_start_time ? new Date(token.service_start_time).toLocaleString() : ''} />
+          <InfoRow label="Arrival Confirmed" val={token.arrival_confirmed_at ? new Date(token.arrival_confirmed_at).toLocaleString() : 'Pending'} />
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '24px' }}>
+          <button className="primary-btn" onClick={() => { onAction(token.id, 'complete'); onClose(); }}>Complete</button>
+          <button className="secondary-btn" onClick={() => { onAction(token.id, 'no-show'); onClose(); }}>No-Show</button>
+          <button className="ghost danger" onClick={() => { onAction(token.id, 'cancel'); onClose(); }}>Cancel</button>
+        </div>
       </div>
     </div>
   );
@@ -2115,9 +2182,17 @@ function App() {
                         if (tokenFilter === 'cancelled') return ['cancelled', 'no-show', 'history'].includes(t.status);
                         return false;
                       })
-                      .map(t => (
-                        <TokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onReQueue={id => updateToken(id, 're-queue')} onArrive={id => updateToken(id, 'arrive')} isAdmin={view === 'admin'} currentUser={user} office={selectedOffice} onSelect={setSelectedToken} />
-                      ))}
+                      .map(t => {
+                        if (view === 'admin') {
+                          return (
+                            <AdminTokenRow key={t.id} token={t} onComplete={id => updateToken(id, 'complete')} onNoShow={id => updateToken(id, 'no-show')} onCancel={id => updateToken(id, 'cancel')} onReQueue={id => updateToken(id, 're-queue')} onSelect={setSelectedToken} />
+                          );
+                        } else {
+                          return (
+                            <CustomerTokenRow key={t.id} token={t} onCancel={id => updateToken(id, 'cancel')} onArrive={id => updateToken(id, 'arrive')} isOwner={t.user_id === user?.id} office={selectedOffice} />
+                          );
+                        }
+                      })}
                     {selectedToken && (
                       <TokenDetailsModal token={selectedToken} office={selectedOffice} onClose={() => setSelectedToken(null)} onAction={updateToken} />
                     )}

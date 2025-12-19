@@ -54,17 +54,39 @@ const transporter = nodemailer.createTransport({
   auth: { user: smtpUser, pass: smtpPass },
 });
 
-const sendEmail = async (to, subject, content) => {
-  if (!smtpUser || !smtpPass) return console.log('Mock Email:', { to, subject });
+const sendEmail = async (to, subject, htmlContent) => {
+  console.log('--- EMAIL SENDING START ---');
+  console.log('To:', to);
+  console.log('Subject:', subject);
+  console.log('SMTP Configured:', !!smtpUser && !!smtpPass);
+
+  if (!smtpUser || !smtpPass) return console.log('Mock Email (Missing Config):', { to, subject });
+
   try {
-    const isHtml = typeof content === 'string' && content.trim().startsWith('<');
+    // Generate Check: Content Security (though templates handle escaping, double check is good practice)
+    if (!htmlContent || typeof htmlContent !== 'string') {
+      console.warn('sendEmail received invalid content');
+      return;
+    }
+
+    // Generate Plain Text Fallback
+    const textContent = htmlContent
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove style blocks
+      .replace(/<[^>]+>/g, '') // Remove HTML tags
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ') // Collapse whitespace
+      .trim();
+
     const mailOptions = {
       from: `"GetEzi Team" <${smtpUser}>`,
       to,
       subject,
-      [isHtml ? 'html' : 'text']: content
+      html: htmlContent,
+      text: textContent
     };
+
     await transporter.sendMail(mailOptions);
+    console.log(`Email sent to ${to}`);
   } catch (err) {
     console.error('Error sending email:', err);
   }
@@ -83,9 +105,15 @@ app.post('/api/auth/send-otp', async (req, res) => {
   const { email, type } = req.body;
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + 5 * 60000).toISOString();
-  // Simple stub for email sending
+  // Send OTP via HTML Email
   emailVerificationsStmt.upsert.run({ email, otp, expires_at: expiresAt });
-  await sendEmail(email, 'Your OTP', `OTP: ${otp}`);
+  try {
+    const html = emailTemplates.otp(otp);
+    await sendEmail(email, 'Your Verification Code - GetEzi', html);
+  } catch (err) {
+    console.error("Failed to send OTP email:", err);
+  }
+
   res.json({ message: 'OTP sent' });
 });
 
@@ -96,7 +124,7 @@ app.post('/api/auth/verify-otp', (req, res) => {
   usersStmt.insert.run({ id: uuidv4(), name: 'Verified User', email, hash: 'temp', role: 'customer', created_at: toIso() }); // Stub
 
   // Email Notification: Welcome
-  sendEmail(email, emailTemplates.welcomeCustomer('Verified User'));
+  sendEmail(email, 'Welcome to GetEzi!', emailTemplates.welcomeCustomer('Verified User'));
 
   res.json({ success: true });
 });
@@ -274,7 +302,7 @@ const recalculateQueue = (officeId) => {
           const office = officesStmt.getById.get(officeId);
           const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : token.user_email;
           if (recipientEmail) {
-            sendEmail(recipientEmail, emailTemplates.tokenNoShow(token.user_name, token.token_number, office.name));
+            sendEmail(recipientEmail, 'Missed Appointment - GetEzi', emailTemplates.tokenNoShow(token.user_name, token.token_number, office.name));
           }
           // Since we modified list in-place via DB, we should probably restart recalculate or accept slight staleness until next run?
           // We mark it, next run cleans it up.
@@ -315,7 +343,7 @@ const recalculateQueue = (officeId) => {
       if (recipientEmail) {
         const travelStart = now;
         const arrival = new Date(new Date(now).getTime() + (token.travel_time_minutes || 15) * 60000).toISOString();
-        sendEmail(recipientEmail, emailTemplates.travelInstruction(
+        sendEmail(recipientEmail, 'Time to Leave - GetEzi', emailTemplates.travelInstruction(
           token.user_name,
           token.token_number,
           office.name,
@@ -465,7 +493,7 @@ app.post('/api/offices/:id/book', (req, res) => {
     const recipientEmail = (customerContact && customerContact.includes('@')) ? customerContact : (userId ? usersStmt.getById.get(userId)?.email : null);
 
     if (recipientEmail) {
-      sendEmail(recipientEmail, emailTemplates.bookingConfirmation(
+      sendEmail(recipientEmail, 'Booking Confirmed - GetEzi', emailTemplates.bookingConfirmation(
         token.user_name,
         token.token_number,
         office.name,
@@ -586,7 +614,7 @@ app.post('/api/tokens/:id/complete', (req, res) => {
   const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : (token.user_id ? usersStmt.getById.get(token.user_id)?.email : null);
   if (recipientEmail) {
     const office = officesStmt.getById.get(token.office_id);
-    sendEmail(recipientEmail, emailTemplates.tokenCompleted(
+    sendEmail(recipientEmail, 'Service Completed - GetEzi', emailTemplates.tokenCompleted(
       token.user_name,
       token.token_number,
       office.name
@@ -621,7 +649,7 @@ app.post('/api/tokens/:id/cancel', (req, res) => {
   const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : (token.user_id ? usersStmt.getById.get(token.user_id)?.email : null);
   if (recipientEmail) {
     const office = officesStmt.getById.get(token.office_id);
-    sendEmail(recipientEmail, emailTemplates.tokenCancelled(
+    sendEmail(recipientEmail, 'Token Cancelled - GetEzi', emailTemplates.tokenCancelled(
       token.user_name,
       token.token_number,
       office.name,
@@ -657,7 +685,7 @@ app.post('/api/tokens/:id/no-show', (req, res) => {
   const recipientEmail = (token.user_contact && token.user_contact.includes('@')) ? token.user_contact : (token.user_id ? usersStmt.getById.get(token.user_id)?.email : null);
   if (recipientEmail) {
     const office = officesStmt.getById.get(token.office_id);
-    sendEmail(recipientEmail, emailTemplates.tokenNoShow(
+    sendEmail(recipientEmail, 'Missed Appointment - GetEzi', emailTemplates.tokenNoShow(
       token.user_name,
       token.token_number,
       office.name
